@@ -10,7 +10,7 @@ namespace ProgressiveRendering {
 // 按目标像素预算等比缩小图片；不会放大原图，无效输入返回空尺寸。
 QSize sizeForPixelBudget(const QSize& sourceSize, qint64 targetPixels);
 
-// 根据 100 万像素预算返回拖动预览尺寸，小图直接保留原图尺寸。
+// 根据 20 万像素预算返回拖动预览尺寸，小图直接保留原图尺寸。
 QSize interactivePreviewSize(const QSize& sourceSize);
 
 // 按图片大小返回去重后的可选中间阶段和最终原图尺寸。

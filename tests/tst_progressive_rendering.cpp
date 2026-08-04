@@ -22,21 +22,26 @@ private slots:
 void ProgressiveRenderingTests::adaptivePreviewSizesRespectPixelBudgets() {
     // 小图不应被放大或缩小，拖动阶段直接使用原图尺寸。
     QCOMPARE(
-        ProgressiveRendering::interactivePreviewSize(QSize(1000, 1000)),
-        QSize(1000, 1000));
+        ProgressiveRendering::interactivePreviewSize(QSize(500, 400)),
+        QSize(500, 400));
 
-    // 1080p 和 4K 宽高比相同，按 100 万像素预算应得到相同预览尺寸。
+    // 实际出现卡顿的图片按 20 万像素预算应接近原先流畅的 1/4 预览负载。
+    QCOMPARE(
+        ProgressiveRendering::interactivePreviewSize(QSize(1388, 2048)),
+        QSize(368, 543));
+
+    // 1080p 和 4K 宽高比相同，按 20 万像素预算应得到相同预览尺寸。
     QCOMPARE(
         ProgressiveRendering::interactivePreviewSize(QSize(1920, 1080)),
-        QSize(1333, 750));
+        QSize(596, 335));
     QCOMPARE(
         ProgressiveRendering::interactivePreviewSize(QSize(3840, 2160)),
-        QSize(1333, 750));
+        QSize(596, 335));
 
-    // 1200 万像素和超宽图验证 64 位像素计算、等比缩放与最小尺寸保护。
+    // 1200 万像素和超宽图验证低预算、64 位像素计算与等比缩放。
     QCOMPARE(
         ProgressiveRendering::interactivePreviewSize(QSize(4000, 3000)),
-        QSize(1154, 866));
+        QSize(516, 387));
     QCOMPARE(
         ProgressiveRendering::sizeForPixelBudget(QSize(20000, 100), 1000000),
         QSize(14142, 70));
@@ -49,18 +54,18 @@ void ProgressiveRenderingTests::invalidPixelBudgetReturnsEmptySize() {
 }
 
 void ProgressiveRenderingTests::refinementStagesAdaptToImageClass() {
-    // 小图和恰好 400 万像素的中图松手后都只需要最终原图阶段。
+    // 小图和恰好 100 万像素的中图松手后都只需要最终原图阶段。
+    QCOMPARE(
+        ProgressiveRendering::refinementSizes(QSize(500, 400)),
+        QVector<QSize>({QSize(500, 400)}));
     QCOMPARE(
         ProgressiveRendering::refinementSizes(QSize(1000, 1000)),
         QVector<QSize>({QSize(1000, 1000)}));
-    QCOMPARE(
-        ProgressiveRendering::refinementSizes(QSize(2000, 2000)),
-        QVector<QSize>({QSize(2000, 2000)}));
 
-    // 大图先细化到约 400 万像素，再恢复到精确原图尺寸。
+    // 大图先细化到约 100 万像素，再恢复到精确原图尺寸。
     QCOMPARE(
         ProgressiveRendering::refinementSizes(QSize(3840, 2160)),
-        QVector<QSize>({QSize(2666, 1500), QSize(3840, 2160)}));
+        QVector<QSize>({QSize(1333, 750), QSize(3840, 2160)}));
 }
 
 void ProgressiveRenderingTests::tinyImageRemovesDuplicateRefinementSizes() {
@@ -103,7 +108,7 @@ void ProgressiveRenderingTests::interactiveChangesAreThrottledWithoutStarvation(
 
     // 冷却周期内的多次变化只合并成下一帧，形成真正的节流而不是防抖。
     QTRY_COMPARE_WITH_TIMEOUT(spy.count(), 2, 100);
-    QCOMPARE(spy.first().at(0).toSize(), QSize(1333, 750));
+    QCOMPARE(spy.first().at(0).toSize(), QSize(596, 335));
     QCOMPARE(spy.first().at(2).toBool(), false);
 }
 
@@ -118,7 +123,7 @@ void ProgressiveRenderingTests::releaseRefinesInExpectedOrder() {
     QTRY_COMPARE(spy.count(), 1);
 
     const quint64 generation = spy.at(0).at(1).toULongLong();
-    QCOMPARE(spy.at(0).at(0).toSize(), QSize(2666, 1500));
+    QCOMPARE(spy.at(0).at(0).toSize(), QSize(1333, 750));
 
     QElapsedTimer stageTimer;
     stageTimer.start();
@@ -131,7 +136,7 @@ void ProgressiveRenderingTests::releaseRefinesInExpectedOrder() {
 }
 
 void ProgressiveRenderingTests::smallAndMediumImagesReleaseDirectlyToFullSize() {
-    const QVector<QSize> sourceSizes({QSize(1000, 1000), QSize(1920, 1080)});
+    const QVector<QSize> sourceSizes({QSize(500, 400), QSize(1000, 1000)});
 
     // 小图和中图松手后都直接请求最终原图；两者的拖动预览尺寸由像素预算区分。
     for (const QSize& sourceSize : sourceSizes) {

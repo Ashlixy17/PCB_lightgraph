@@ -4,10 +4,10 @@
 #include <cmath>
 
 namespace {
-// 拖动阶段统一控制在约 100 万像素，使不同分辨率图片的计算量接近。
-constexpr qint64 kInteractivePixelBudget = 1000000;
-// 大图松手后先细化到约 400 万像素，再恢复到完整原图。
-constexpr qint64 kRefinementPixelBudget = 4000000;
+// 拖动阶段控制在约 20 万像素，接近原固定 1/4 预览的流畅负载。
+constexpr qint64 kInteractivePixelBudget = 200000;
+// 超过 100 万像素的大图松手后先细化一次，再恢复到完整原图。
+constexpr qint64 kRefinementPixelBudget = 1000000;
 }
 
 namespace ProgressiveRendering {
@@ -50,7 +50,7 @@ QVector<QSize> refinementSizes(const QSize& sourceSize) {
         return sizes;
     }
 
-    // 只有超过 400 万像素的大图才需要中间细化阶段。
+    // 只有超过 100 万像素的大图才需要中间细化阶段。
     const QSize refinementSize = sizeForPixelBudget(sourceSize, kRefinementPixelBudget);
     if (refinementSize != sourceSize) {
         sizes.append(refinementSize);
