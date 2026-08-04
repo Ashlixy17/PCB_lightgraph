@@ -19,7 +19,8 @@ private slots:
 void ProgressiveRenderingTests::largeImageUsesExpectedFourStageSizes() {
     const QSize sourceSize(800, 600);
 
-    QCOMPARE(ProgressiveRendering::scaledSize(sourceSize, 0.125), QSize(100, 75));
+    // 拖动预览提高到 1/6 线性尺寸，在清晰度和实时计算量之间取中间值。
+    QCOMPARE(ProgressiveRendering::scaledSize(sourceSize, 1.0 / 6.0), QSize(133, 100));
     QCOMPARE(
         ProgressiveRendering::refinementSizes(sourceSize),
         QVector<QSize>({QSize(200, 150), QSize(400, 300), QSize(800, 600)}));
@@ -65,7 +66,7 @@ void ProgressiveRenderingTests::interactiveChangesAreThrottledWithoutStarvation(
 
     // 冷却周期内的多次变化只合并成下一帧，形成真正的节流而不是防抖。
     QTRY_COMPARE_WITH_TIMEOUT(spy.count(), 2, 100);
-    QCOMPARE(spy.first().at(0).toSize(), QSize(100, 75));
+    QCOMPARE(spy.first().at(0).toSize(), QSize(133, 100));
     QCOMPARE(spy.first().at(2).toBool(), false);
 }
 
