@@ -7,8 +7,10 @@ INCLUDEPATH += ..
 
 SOURCES += \
     tst_progressive_rendering.cpp \
+    ../progressiverendercontroller.cpp \
     ../progressiverenderutils.cpp
 
 HEADERS += \
+    ../progressiverendercontroller.h \
     ../progressiverenderutils.h \
     ../ledstrip.h

@@ -1,4 +1,5 @@
 #include <QtTest>
+#include "progressiverendercontroller.h"
 #include "progressiverenderutils.h"
 
 class ProgressiveRenderingTests : public QObject {
@@ -8,6 +9,10 @@ private slots:
     void largeImageUsesExpectedFourStageSizes();
     void tinyImageRemovesDuplicateRefinementSizes();
     void ledGeometryScalesWithoutChangingColor();
+    void interactiveChangesAreCoalesced();
+    void releaseRefinesInExpectedOrder();
+    void invalidatedGenerationDoesNotContinue();
+    void invalidationExposesCurrentGeneration();
 };
 
 void ProgressiveRenderingTests::largeImageUsesExpectedFourStageSizes() {
@@ -43,5 +48,68 @@ void ProgressiveRenderingTests::ledGeometryScalesWithoutChangingColor() {
     QCOMPARE(scaled.first().color, QColor(12, 34, 56, 78));
 }
 
-QTEST_APPLESS_MAIN(ProgressiveRenderingTests)
+void ProgressiveRenderingTests::interactiveChangesAreCoalesced() {
+    ProgressiveRenderController controller;
+    QSignalSpy spy(
+        &controller,
+        SIGNAL(renderRequested(QSize,quint64,bool)));
+
+    controller.sliderPressed(QSize(800, 600));
+    controller.sliderValueChanged(QSize(800, 600));
+    controller.sliderValueChanged(QSize(800, 600));
+    controller.sliderValueChanged(QSize(800, 600));
+
+    QTRY_COMPARE_WITH_TIMEOUT(spy.count(), 1, 100);
+    QCOMPARE(spy.first().at(0).toSize(), QSize(100, 75));
+    QCOMPARE(spy.first().at(2).toBool(), false);
+}
+
+void ProgressiveRenderingTests::releaseRefinesInExpectedOrder() {
+    ProgressiveRenderController controller;
+    QSignalSpy spy(
+        &controller,
+        SIGNAL(renderRequested(QSize,quint64,bool)));
+
+    controller.sliderPressed(QSize(800, 600));
+    controller.sliderReleased(QSize(800, 600));
+    QTRY_COMPARE(spy.count(), 1);
+
+    const quint64 generation = spy.at(0).at(1).toULongLong();
+    QCOMPARE(spy.at(0).at(0).toSize(), QSize(200, 150));
+    controller.renderFinished(generation);
+    QTRY_COMPARE(spy.count(), 2);
+    QCOMPARE(spy.at(1).at(0).toSize(), QSize(400, 300));
+    controller.renderFinished(generation);
+    QTRY_COMPARE(spy.count(), 3);
+    QCOMPARE(spy.at(2).at(0).toSize(), QSize(800, 600));
+    QCOMPARE(spy.at(2).at(2).toBool(), true);
+}
+
+void ProgressiveRenderingTests::invalidatedGenerationDoesNotContinue() {
+    ProgressiveRenderController controller;
+    QSignalSpy spy(
+        &controller,
+        SIGNAL(renderRequested(QSize,quint64,bool)));
+
+    controller.sliderPressed(QSize(800, 600));
+    controller.sliderReleased(QSize(800, 600));
+    QTRY_COMPARE(spy.count(), 1);
+
+    const quint64 staleGeneration = spy.first().at(1).toULongLong();
+    controller.invalidate();
+    controller.renderFinished(staleGeneration);
+    QTest::qWait(10);
+    QCOMPARE(spy.count(), 1);
+}
+
+void ProgressiveRenderingTests::invalidationExposesCurrentGeneration() {
+    ProgressiveRenderController controller;
+
+    // 主窗口需要用同一代次判断全分辨率结果是否仍可用于导出。
+    const quint64 generation = controller.invalidate();
+    QCOMPARE(controller.currentGeneration(), generation);
+}
+
+// 调度器依赖 Qt 事件循环驱动计时器，因此测试使用无界面的 QCoreApplication 入口。
+QTEST_GUILESS_MAIN(ProgressiveRenderingTests)
 #include "tst_progressive_rendering.moc"
