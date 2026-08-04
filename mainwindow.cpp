@@ -112,7 +112,7 @@ static qint64 fileStampMs(const QFileInfo& fi) {
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setupUI();
-    // 每个阶段完成后再通知调度器，保证 1/4、1/2、原图按顺序逐帧显示。
+    // 每个阶段完成后再通知调度器，保证自适应预览、可选细化和原图逐帧显示。
     connect(
         &m_progressiveRenderController,
         &ProgressiveRenderController::renderRequested,
@@ -454,7 +454,7 @@ QSlider* MainWindow::createSlider(QString title, int min, int max, int def, QVBo
         if (m_origin.isNull()) {
             updateProcess();
         } else if (s->isSliderDown()) {
-            // 鼠标拖动时只提交合并后的 1/4 预览；键盘等离散修改仍直接得到完整结果。
+            // 鼠标拖动时只提交合并后的自适应预览；键盘等离散修改仍直接得到完整结果。
             m_progressiveRenderController.sliderValueChanged(m_origin.size());
         } else {
             updateProcess();
@@ -467,7 +467,7 @@ QSlider* MainWindow::createSlider(QString title, int min, int max, int def, QVBo
     });
     connect(s, &QSlider::sliderReleased, this, [this]() {
         if (!m_origin.isNull()) {
-            // 松手后不等待固定延迟，从 1/2 继续恢复到原图，避免重复计算拖动时的 1/4。
+            // 松手后不等待固定延迟，按图片大小选择是否经过中间细化再恢复原图。
             m_progressiveRenderController.sliderReleased(m_origin.size());
         }
     });

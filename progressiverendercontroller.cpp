@@ -3,8 +3,6 @@
 #include "progressiverenderutils.h"
 
 namespace {
-// 1/4 拖动预览只处理原图 1/16 的像素，并与后续 1/2、原图组成三阶段。
-constexpr qreal kInteractiveLinearScale = 0.25;
 // 拖动预览限制在约 30 FPS；细化帧保留约一至两次屏幕刷新时间。
 constexpr int kInteractiveFrameIntervalMs = 30;
 constexpr int kRefinementFrameIntervalMs = 25;
@@ -24,7 +22,7 @@ ProgressiveRenderController::ProgressiveRenderController(QObject *parent)
         // 在渲染前进入下一冷却周期；期间到来的变化会被合并到再下一帧。
         m_interactiveTimer.start();
         emit renderRequested(
-            ProgressiveRendering::scaledSize(m_sourceSize, kInteractiveLinearScale),
+            ProgressiveRendering::interactivePreviewSize(m_sourceSize),
             m_generation,
             false);
     });
@@ -55,11 +53,11 @@ void ProgressiveRenderController::sliderValueChanged(const QSize& sourceSize) {
         return;
     }
 
-    // 一次新拖动的首帧立即显示，后续帧才受 30 FPS 上限约束。
+    // 首帧立即使用自适应像素预算，后续帧才受 30 FPS 上限约束。
     m_interactivePending = false;
     m_interactiveTimer.start();
     emit renderRequested(
-        ProgressiveRendering::scaledSize(m_sourceSize, kInteractiveLinearScale),
+        ProgressiveRendering::interactivePreviewSize(m_sourceSize),
         m_generation,
         false);
 }

@@ -7,10 +7,13 @@
 
 namespace ProgressiveRendering {
 
-// 按线性比例计算渲染尺寸；有效输入始终至少保留一个像素。
-QSize scaledSize(const QSize& sourceSize, qreal linearScale);
+// 按目标像素预算等比缩小图片；不会放大原图，无效输入返回空尺寸。
+QSize sizeForPixelBudget(const QSize& sourceSize, qint64 targetPixels);
 
-// 返回去重后的 1/2、1:1 细化尺寸；1/4 已由拖动预览阶段负责。
+// 根据 100 万像素预算返回拖动预览尺寸，小图直接保留原图尺寸。
+QSize interactivePreviewSize(const QSize& sourceSize);
+
+// 按图片大小返回去重后的可选中间阶段和最终原图尺寸。
 QVector<QSize> refinementSizes(const QSize& sourceSize);
 
 // 将原图坐标中的 LED 数据临时映射到目标预览尺寸，不修改项目原始数据。

@@ -74,7 +74,7 @@ private:
     QImage m_origin;
     // 生产层只保存最近一次全分辨率结果，低分辨率帧不得污染导出数据。
     QMap<QString, QImage> m_layers;
-    // 预览层保存当前可见阶段，可随 1/4、1/2、原图逐级替换。
+    // 预览层保存当前可见阶段，可随自适应预览、可选细化和原图逐级替换。
     QMap<QString, QImage> m_previewLayers;
     QVector<LEDStrip> m_ledStrips;
     QImage processedOrigin;
