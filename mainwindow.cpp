@@ -828,7 +828,12 @@ bool MainWindow::handleLayerPreviewEvent(QLabel* label, QEvent* event, const QIm
         const double newZoom = qBound(0.2, oldZoom * factor, 8.0);
         if (std::abs(newZoom - oldZoom) < 1e-6) return true;
 
+        // Qt 6 使用浮点坐标 position()；保留 Qt 5 分支以兼容原项目工具链。
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        const QPoint cursorPos = we->position().toPoint();
+#else
         const QPoint cursorPos = we->pos();
+#endif
         const QRectF oldRect = calcPreviewRect(label->size(), img.size(), oldZoom, state.pan);
         state.zoom = newZoom;
 
@@ -889,7 +894,12 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
             const double newZoom = qBound(0.2, oldZoom * factor, 8.0);
             if (std::abs(newZoom - oldZoom) < 1e-6) return true;
 
+            // 主预览与图层预览采用相同的 Qt 5/Qt 6 鼠标坐标兼容逻辑。
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+            const QPoint cursorPos = we->position().toPoint();
+#else
             const QPoint cursorPos = we->pos();
+#endif
             const QRectF oldRect = calcPreviewRect(l_composite->size(), m_previewComposite.size(), oldZoom, m_previewPan);
 
             m_previewZoom = newZoom;
