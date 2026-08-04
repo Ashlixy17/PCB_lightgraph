@@ -1,0 +1,14 @@
+QT += core gui testlib
+CONFIG += console testcase c++11
+TEMPLATE = app
+TARGET = progressive_rendering_tests
+
+INCLUDEPATH += ..
+
+SOURCES += \
+    tst_progressive_rendering.cpp \
+    ../progressiverenderutils.cpp
+
+HEADERS += \
+    ../progressiverenderutils.h \
+    ../ledstrip.h
