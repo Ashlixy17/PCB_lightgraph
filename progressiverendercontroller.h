@@ -23,7 +23,7 @@ signals:
     void renderRequested(const QSize& targetSize, quint64 generation, bool authoritative);
 
 private:
-    void queueNextRefinement(quint64 generation);
+    void queueNextRefinement(quint64 generation, int delayMs);
     void requestNextRefinement(quint64 generation);
 
     QTimer m_interactiveTimer;
@@ -32,6 +32,8 @@ private:
     int m_nextRefinementIndex = 0;
     quint64 m_generation = 0;
     quint64 m_refinementGeneration = 0;
+    // 计时器冷却期间只记录“还有新值”，下一帧统一读取最新参数。
+    bool m_interactivePending = false;
 };
 
 #endif // PROGRESSIVERENDERCONTROLLER_H
