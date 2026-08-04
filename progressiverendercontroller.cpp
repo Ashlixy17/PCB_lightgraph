@@ -3,8 +3,8 @@
 #include "progressiverenderutils.h"
 
 namespace {
-// 1/6 预览比原 1/8 更清晰，同时像素量仍低于原图的 3%。
-constexpr qreal kInteractiveLinearScale = 1.0 / 6.0;
+// 1/4 拖动预览只处理原图 1/16 的像素，并与后续 1/2、原图组成三阶段。
+constexpr qreal kInteractiveLinearScale = 0.25;
 // 拖动预览限制在约 30 FPS；细化帧保留约一至两次屏幕刷新时间。
 constexpr int kInteractiveFrameIntervalMs = 30;
 constexpr int kRefinementFrameIntervalMs = 25;

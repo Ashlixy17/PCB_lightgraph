@@ -21,7 +21,8 @@ QVector<QSize> refinementSizes(const QSize& sourceSize) {
         return sizes;
     }
 
-    const qreal scales[] = {0.25, 0.5, 1.0};
+    // 拖动阶段已经显示 1/4，松手后只继续提升到 1/2 和原图。
+    const qreal scales[] = {0.5, 1.0};
     for (qreal scale : scales) {
         const QSize size = scaledSize(sourceSize, scale);
         // 极小图片可能在多个比例下得到相同尺寸，跳过重复计算。

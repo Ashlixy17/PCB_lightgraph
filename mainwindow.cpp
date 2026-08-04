@@ -467,7 +467,7 @@ QSlider* MainWindow::createSlider(QString title, int min, int max, int def, QVBo
     });
     connect(s, &QSlider::sliderReleased, this, [this]() {
         if (!m_origin.isNull()) {
-            // 松手后不等待固定延迟，立即从 1/4 开始逐级恢复到原图。
+            // 松手后不等待固定延迟，从 1/2 继续恢复到原图，避免重复计算拖动时的 1/4。
             m_progressiveRenderController.sliderReleased(m_origin.size());
         }
     });

@@ -7,7 +7,7 @@ class ProgressiveRenderingTests : public QObject {
     Q_OBJECT
 
 private slots:
-    void largeImageUsesExpectedFourStageSizes();
+    void largeImageUsesExpectedThreeStageSizes();
     void tinyImageRemovesDuplicateRefinementSizes();
     void ledGeometryScalesWithoutChangingColor();
     void interactiveChangesAreThrottledWithoutStarvation();
@@ -16,14 +16,14 @@ private slots:
     void invalidationExposesCurrentGeneration();
 };
 
-void ProgressiveRenderingTests::largeImageUsesExpectedFourStageSizes() {
+void ProgressiveRenderingTests::largeImageUsesExpectedThreeStageSizes() {
     const QSize sourceSize(800, 600);
 
-    // 拖动预览提高到 1/6 线性尺寸，在清晰度和实时计算量之间取中间值。
-    QCOMPARE(ProgressiveRendering::scaledSize(sourceSize, 1.0 / 6.0), QSize(133, 100));
+    // 拖动阶段直接使用 1/4，松手后只需继续生成 1/2 和原图两个阶段。
+    QCOMPARE(ProgressiveRendering::scaledSize(sourceSize, 0.25), QSize(200, 150));
     QCOMPARE(
         ProgressiveRendering::refinementSizes(sourceSize),
-        QVector<QSize>({QSize(200, 150), QSize(400, 300), QSize(800, 600)}));
+        QVector<QSize>({QSize(400, 300), QSize(800, 600)}));
 }
 
 void ProgressiveRenderingTests::tinyImageRemovesDuplicateRefinementSizes() {
@@ -66,7 +66,7 @@ void ProgressiveRenderingTests::interactiveChangesAreThrottledWithoutStarvation(
 
     // 冷却周期内的多次变化只合并成下一帧，形成真正的节流而不是防抖。
     QTRY_COMPARE_WITH_TIMEOUT(spy.count(), 2, 100);
-    QCOMPARE(spy.first().at(0).toSize(), QSize(133, 100));
+    QCOMPARE(spy.first().at(0).toSize(), QSize(200, 150));
     QCOMPARE(spy.first().at(2).toBool(), false);
 }
 
@@ -81,7 +81,7 @@ void ProgressiveRenderingTests::releaseRefinesInExpectedOrder() {
     QTRY_COMPARE(spy.count(), 1);
 
     const quint64 generation = spy.at(0).at(1).toULongLong();
-    QCOMPARE(spy.at(0).at(0).toSize(), QSize(200, 150));
+    QCOMPARE(spy.at(0).at(0).toSize(), QSize(400, 300));
 
     QElapsedTimer stageTimer;
     stageTimer.start();
@@ -89,11 +89,8 @@ void ProgressiveRenderingTests::releaseRefinesInExpectedOrder() {
     QTRY_COMPARE(spy.count(), 2);
     // 中间阶段至少保留接近一帧的时间，避免 Qt 把多次 setPixmap 合并成最终一帧。
     QVERIFY(stageTimer.elapsed() >= 15);
-    QCOMPARE(spy.at(1).at(0).toSize(), QSize(400, 300));
-    controller.renderFinished(generation);
-    QTRY_COMPARE(spy.count(), 3);
-    QCOMPARE(spy.at(2).at(0).toSize(), QSize(800, 600));
-    QCOMPARE(spy.at(2).at(2).toBool(), true);
+    QCOMPARE(spy.at(1).at(0).toSize(), QSize(800, 600));
+    QCOMPARE(spy.at(1).at(2).toBool(), true);
 }
 
 void ProgressiveRenderingTests::invalidatedGenerationDoesNotContinue() {
