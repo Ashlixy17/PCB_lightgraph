@@ -10,7 +10,7 @@ class ProgressiveRenderController : public QObject {
     Q_OBJECT
 
 public:
-    explicit ProgressiveRenderController(QObject* parent = nullptr);
+    explicit ProgressiveRenderController(QObject *parent = nullptr);
 
     void sliderPressed(const QSize& sourceSize);
     void sliderValueChanged(const QSize& sourceSize);

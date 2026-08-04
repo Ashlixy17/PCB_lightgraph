@@ -27,7 +27,7 @@ void ProgressiveRenderingTests::largeImageUsesExpectedThreeStageSizes() {
 }
 
 void ProgressiveRenderingTests::tinyImageRemovesDuplicateRefinementSizes() {
-    // 极小图片的三个细化阶段会得到相同尺寸，只应保留一次完整渲染。
+    // 极小图片的两个细化阶段会得到相同尺寸，只应保留一次完整渲染。
     QCOMPARE(
         ProgressiveRendering::refinementSizes(QSize(1, 1)),
         QVector<QSize>({QSize(1, 1)}));

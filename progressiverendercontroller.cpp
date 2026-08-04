@@ -10,7 +10,7 @@ constexpr int kInteractiveFrameIntervalMs = 30;
 constexpr int kRefinementFrameIntervalMs = 25;
 }
 
-ProgressiveRenderController::ProgressiveRenderController(QObject* parent)
+ProgressiveRenderController::ProgressiveRenderController(QObject *parent)
     : QObject(parent) {
     // 拖动期间按固定节奏读取最新值，避免密集事件饿死预览帧。
     m_interactiveTimer.setInterval(kInteractiveFrameIntervalMs);

@@ -454,7 +454,7 @@ QSlider* MainWindow::createSlider(QString title, int min, int max, int def, QVBo
         if (m_origin.isNull()) {
             updateProcess();
         } else if (s->isSliderDown()) {
-            // 鼠标拖动时只提交合并后的 1/8 预览；键盘等离散修改仍直接得到完整结果。
+            // 鼠标拖动时只提交合并后的 1/4 预览；键盘等离散修改仍直接得到完整结果。
             m_progressiveRenderController.sliderValueChanged(m_origin.size());
         } else {
             updateProcess();
@@ -745,7 +745,7 @@ bool MainWindow::mapLabelToImage(const QPoint& labelPos, QPoint& imgPos) const {
 
     const double nx = (labelPos.x() - drawRect.left()) / drawRect.width();
     const double ny = (labelPos.y() - drawRect.top()) / drawRect.height();
-    // 预览可能只有 1/8 分辨率，鼠标位置仍要映射回原图坐标供 LED 工程数据使用。
+    // 低分辨率预览中的鼠标位置仍要映射回原图坐标，供 LED 工程数据使用。
     const int x = qBound(0, static_cast<int>(std::floor(nx * processedOrigin.width())), processedOrigin.width() - 1);
     const int y = qBound(0, static_cast<int>(std::floor(ny * processedOrigin.height())), processedOrigin.height() - 1);
     imgPos = QPoint(x, y);
