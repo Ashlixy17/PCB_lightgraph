@@ -20,6 +20,7 @@ class QTimer;
 #include "edgesharpener.h"
 #include "ledlayoutengine.h"
 #include "layergenerator.h"
+#include "progressiverendercontroller.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -51,6 +52,7 @@ private slots:
 
 private:
     void setupUI();
+    void renderAtSize(const QSize& targetSize, quint64 generation, bool authoritative);
     QSlider* createSlider(QString title, int min, int max, int def, class QVBoxLayout* layout);
     float distanceToSegment(QPoint p, QPoint v, QPoint w);
     void updateCompositePreview(const QImage& img);
@@ -70,10 +72,13 @@ private:
     void checkTempImageUpdated();
 
     QImage m_origin;
+    // 生产层只保存最近一次全分辨率结果，低分辨率帧不得污染导出数据。
     QMap<QString, QImage> m_layers;
+    QMap<QString, QImage> m_previewLayers;
     QVector<LEDStrip> m_ledStrips;
     QImage processedOrigin;
     QImage m_previewComposite;
+    quint64 m_fullResolutionGeneration = 0;
 
     QPoint m_pendingStart;
     bool m_isPlacing = false;
@@ -136,6 +141,8 @@ private:
     EdgeSharpener m_edgeSharpener;
     LEDLayoutEngine m_ledLayoutEngine;
     LayerGenerator m_layerGenerator;
+    // 调度器只负责代次和阶段顺序，实际图像处理仍由主窗口同步执行。
+    ProgressiveRenderController m_progressiveRenderController;
 };
 
 #endif
