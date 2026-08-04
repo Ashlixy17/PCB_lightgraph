@@ -534,7 +534,10 @@ void MainWindow::renderAtSize(const QSize& targetSize, quint64 generation, bool 
     int transThresh = s_trans->value();
     const int radVal = qMax(1, qRound(s_ledRad->value() * renderScale));
     // 灯光开关只影响预览合成图，不改变生产层内容。
-    bool showOverlay = (check_lightEnable && check_lightEnable->isChecked() && check_showLEDOverlay && check_showLEDOverlay->isChecked());
+    const bool showOverlay = check_lightEnable
+        && check_lightEnable->isChecked()
+        && check_showLEDOverlay
+        && check_showLEDOverlay->isChecked();
 
     // 使用 ImageProcessor 处理图像
     QImage imgCopper, imgMask, imgSilk, imgBottom, imgComp;
@@ -542,7 +545,14 @@ void MainWindow::renderAtSize(const QSize& targetSize, quint64 generation, bool 
     // 边缘掩码必须与当前预览分辨率一致，后续像素覆盖才不会错位。
     QImage edgeMask;
     if (check_edgeEnable && check_edgeEnable->isChecked()) {
-        edgeMask = m_edgeSharpener.buildEdgeMaskForImage(renderOrigin, edgeMode, s_edgeThresh->value(), s_edgeThreshMax->value(), m_edgePrefilterEnabled, m_edgePrefilterKernelSize, m_edgePrefilterSigma);
+        edgeMask = m_edgeSharpener.buildEdgeMaskForImage(
+            renderOrigin,
+            edgeMode,
+            s_edgeThresh->value(),
+            s_edgeThreshMax->value(),
+            m_edgePrefilterEnabled,
+            m_edgePrefilterKernelSize,
+            m_edgePrefilterSigma);
     }
 
     m_imageProcessor.processImage(
@@ -746,8 +756,14 @@ bool MainWindow::mapLabelToImage(const QPoint& labelPos, QPoint& imgPos) const {
     const double nx = (labelPos.x() - drawRect.left()) / drawRect.width();
     const double ny = (labelPos.y() - drawRect.top()) / drawRect.height();
     // 低分辨率预览中的鼠标位置仍要映射回原图坐标，供 LED 工程数据使用。
-    const int x = qBound(0, static_cast<int>(std::floor(nx * processedOrigin.width())), processedOrigin.width() - 1);
-    const int y = qBound(0, static_cast<int>(std::floor(ny * processedOrigin.height())), processedOrigin.height() - 1);
+    const int x = qBound(
+        0,
+        static_cast<int>(std::floor(nx * processedOrigin.width())),
+        processedOrigin.width() - 1);
+    const int y = qBound(
+        0,
+        static_cast<int>(std::floor(ny * processedOrigin.height())),
+        processedOrigin.height() - 1);
     imgPos = QPoint(x, y);
     return true;
 }
@@ -1564,10 +1580,30 @@ void MainWindow::resizeEvent(QResizeEvent *event) {
     }
 
     // 窗口尺寸变化只重绘当前可见阶段，不触发新的图像处理。
-    if (l_copper && m_previewLayers.contains("Top_Copper")) updateLayerPreview(l_copper, m_previewLayers["Top_Copper"], m_layerPreviewStates[l_copper]);
-    if (l_mask && m_previewLayers.contains("Top_Mask")) updateLayerPreview(l_mask, m_previewLayers["Top_Mask"], m_layerPreviewStates[l_mask]);
-    if (l_silk && m_previewLayers.contains("Top_Silk")) updateLayerPreview(l_silk, m_previewLayers["Top_Silk"], m_layerPreviewStates[l_silk]);
-    if (l_bottom && m_previewLayers.contains("Bottom_Mask")) updateLayerPreview(l_bottom, m_previewLayers["Bottom_Mask"], m_layerPreviewStates[l_bottom]);
+    if (l_copper && m_previewLayers.contains("Top_Copper")) {
+        updateLayerPreview(
+            l_copper,
+            m_previewLayers["Top_Copper"],
+            m_layerPreviewStates[l_copper]);
+    }
+    if (l_mask && m_previewLayers.contains("Top_Mask")) {
+        updateLayerPreview(
+            l_mask,
+            m_previewLayers["Top_Mask"],
+            m_layerPreviewStates[l_mask]);
+    }
+    if (l_silk && m_previewLayers.contains("Top_Silk")) {
+        updateLayerPreview(
+            l_silk,
+            m_previewLayers["Top_Silk"],
+            m_layerPreviewStates[l_silk]);
+    }
+    if (l_bottom && m_previewLayers.contains("Bottom_Mask")) {
+        updateLayerPreview(
+            l_bottom,
+            m_previewLayers["Bottom_Mask"],
+            m_layerPreviewStates[l_bottom]);
+    }
 }
 
 void MainWindow::openPaintEditor() {

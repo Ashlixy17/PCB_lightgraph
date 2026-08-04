@@ -52,6 +52,13 @@ private slots:
 
 private:
     void setupUI();
+
+    /**
+     * @brief 按指定阶段尺寸生成预览，并在完整分辨率阶段更新导出数据
+     * @param targetSize 当前阶段的渲染尺寸
+     * @param generation 当前请求所属的渲染代次
+     * @param authoritative 是否允许本阶段结果更新导出数据
+     */
     void renderAtSize(const QSize& targetSize, quint64 generation, bool authoritative);
     QSlider* createSlider(QString title, int min, int max, int def, class QVBoxLayout* layout);
     float distanceToSegment(QPoint p, QPoint v, QPoint w);

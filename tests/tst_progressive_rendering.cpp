@@ -76,6 +76,7 @@ void ProgressiveRenderingTests::tinyImageRemovesDuplicateRefinementSizes() {
 }
 
 void ProgressiveRenderingTests::ledGeometryScalesWithoutChangingColor() {
+    // 预览缩放只改变 LED 几何数据，颜色和透明度必须保持原值。
     LEDStrip strip;
     strip.start = QPoint(80, 40);
     strip.end = QPoint(160, 120);
@@ -154,6 +155,7 @@ void ProgressiveRenderingTests::smallAndMediumImagesReleaseDirectlyToFullSize() 
 }
 
 void ProgressiveRenderingTests::invalidatedGenerationDoesNotContinue() {
+    // 新代次产生后，旧代次即使报告完成也不能继续请求下一细化阶段。
     ProgressiveRenderController controller;
     QSignalSpy spy(
         &controller,
