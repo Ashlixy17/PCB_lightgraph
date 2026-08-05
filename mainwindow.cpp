@@ -173,7 +173,7 @@ void MainWindow::setupUI() {
     basicLayout->addWidget(combo_surfaceFinish);
 
     combo_maskColor = new QComboBox();
-    combo_maskColor->addItems({"蓝色", "黑色", "红色", "绿色"});
+    combo_maskColor->addItems({"蓝色", "黑色", "红色", "绿色", "白色"});
     connect(combo_maskColor, SIGNAL(currentIndexChanged(int)), this, SLOT(updateProcess()));
     basicLayout->addWidget(new QLabel("阻焊颜色:"));
     basicLayout->addWidget(combo_maskColor);
@@ -506,7 +506,7 @@ void MainWindow::renderAtSize(const QSize& targetSize, quint64 generation, bool 
     // 获取参数
     QString maskColorName = combo_maskColor->currentText();
     QString finishType = combo_surfaceFinish->currentText();
-    bool isWhiteMask = false;
+    bool isWhiteMask = (maskColorName == "白色");
     bool enableBareSubstrate = (check_bareSubstrateEnable && check_bareSubstrateEnable->isChecked());
     bool bareSubstrateUseGrayBinding = (radio_bareSubstrateGray && radio_bareSubstrateGray->isChecked());
     int bareSubstrateGrayMinPct = s_bareSubstrateGrayA ? s_bareSubstrateGrayA->value() : 0;

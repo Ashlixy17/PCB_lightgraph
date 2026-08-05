@@ -38,7 +38,9 @@ QColor ImageProcessor::getSolderMaskColor(const QString& colorName) {
     return QColor(240, 240, 240, 220); // 白色
 }
 
-QColor ImageProcessor::getSilkColor(const QString&) {
+QColor ImageProcessor::getSilkColor(const QString& maskColorName) {
+    // 白色阻焊板配黑色丝印（深灰，避免死黑）；其余颜色配白色丝印
+    if (maskColorName == "白色") return QColor(20, 20, 20);
     return Qt::white;
 }
 
@@ -203,8 +205,17 @@ void ImageProcessor::buildBaseLayers(
             int grayPct = qRound(gray * 100.0 / 255.0);
 
             bool isMetalPixel = isMetal(col, isHASL, goldThresh);
-            bool silk = (gray > silkThresh) && !isMetalPixel;
-            bool copperUnderMask = !isMetalPixel && !silk && (gray > effectiveCopperThresh);
+            // 丝印判定：深色阻焊 = 源图亮像素（白墨印深色板）；
+            // 白色阻焊 = 源图暗像素（黑墨印白板）——色彩逻辑与其他阻焊相反，
+            // 保证输出明暗与源图一致（该白的地方白、该黑的地方黑）。
+            bool silk = !isMetalPixel && (isWhiteMask
+                ? (gray < (255 - silkThresh))
+                : (gray > silkThresh));
+            // 敷铜判定：深色阻焊 = 灰度较亮处；白色阻焊相反 = 灰度较深处
+            // （还没到黑色丝印的那一段），有铜的白油显浅灰、无铜的白油显白。
+            bool copperUnderMask = !isMetalPixel && !silk && (isWhiteMask
+                ? (gray < effectiveCopperThresh)
+                : (gray > effectiveCopperThresh));
             bool bareSubstratePixel = false;
 
             if (enableBareSubstrate && !isMetalPixel) {
@@ -237,8 +248,21 @@ void ImageProcessor::buildBaseLayers(
                 pixelRes = bareSubstrateColor;
             } else {
                 if (!maskOpen) {
-                    QColor appliedMask = copperUnderMask ? maskColor.lighter(135) : maskColor;
-                    pixelRes = blendColor(pixelRes, appliedMask, copperUnderMask ? 170 : 205);
+                    if (isWhiteMask) {
+                        // 白色阻焊特例：无铜（白油盖基材）显白、有铜（白油盖铜）显浅灰，
+                        // 与深色阻焊相反——深色靠敷铜 lighter() 提亮，白色靠敷铜向金属色
+                        // 靠拢压灰（介于纯白与喷锡之间、更接近纯白）。
+                        // 注意：不能用 metalRenderColor 混色——沉金时金属色是金色，
+                        // 会让浅灰发黄；这里固定用中性金属灰，不受表面处理影响。
+                        // 混色权重整体提高（250 vs 205），避免深棕底色把白色压成灰白。
+                        QColor appliedMask = copperUnderMask
+                            ? blendColor(maskColor, QColor(200, 200, 210), 60)   // 敷铜：固定中性浅灰
+                            : maskColor;                                          // 无敷铜：白色
+                        pixelRes = blendColor(pixelRes, appliedMask, 250);
+                    } else {
+                        QColor appliedMask = copperUnderMask ? maskColor.lighter(135) : maskColor;
+                        pixelRes = blendColor(pixelRes, appliedMask, copperUnderMask ? 170 : 205);
+                    }
                 }
 
                 if (silk) {
