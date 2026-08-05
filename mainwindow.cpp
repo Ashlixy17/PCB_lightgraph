@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "progressiverenderutils.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -111,6 +112,15 @@ static qint64 fileStampMs(const QFileInfo& fi) {
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setupUI();
+    // 每个阶段完成后再通知调度器，保证自适应预览、可选细化和原图逐帧显示。
+    connect(
+        &m_progressiveRenderController,
+        &ProgressiveRenderController::renderRequested,
+        this,
+        [this](const QSize& targetSize, quint64 generation, bool authoritative) {
+            renderAtSize(targetSize, generation, authoritative);
+            m_progressiveRenderController.renderFinished(generation);
+        });
     initTempWorkspace();
     syncArgsToJson();
 
@@ -441,7 +451,25 @@ QSlider* MainWindow::createSlider(QString title, int min, int max, int def, QVBo
     layout->addWidget(s);
     connect(s, &QSlider::valueChanged, [=](int v){
         lbl->setText(QString("%1: %2").arg(title).arg(v));
-        updateProcess();
+        if (m_origin.isNull()) {
+            updateProcess();
+        } else if (s->isSliderDown()) {
+            // 鼠标拖动时只提交合并后的自适应预览；键盘等离散修改仍直接得到完整结果。
+            m_progressiveRenderController.sliderValueChanged(m_origin.size());
+        } else {
+            updateProcess();
+        }
+    });
+    connect(s, &QSlider::sliderPressed, this, [this]() {
+        if (!m_origin.isNull()) {
+            m_progressiveRenderController.sliderPressed(m_origin.size());
+        }
+    });
+    connect(s, &QSlider::sliderReleased, this, [this]() {
+        if (!m_origin.isNull()) {
+            // 松手后不等待固定延迟，按图片大小选择是否经过中间细化再恢复原图。
+            m_progressiveRenderController.sliderReleased(m_origin.size());
+        }
     });
     return s;
 }
@@ -452,7 +480,28 @@ void MainWindow::updateProcess() {
         return;
     }
 
+    // 非拖动修改直接建立新代次并生成可导出的全分辨率结果。
     processedOrigin = m_origin;
+    const quint64 generation = m_progressiveRenderController.invalidate();
+    renderAtSize(m_origin.size(), generation, true);
+}
+
+void MainWindow::renderAtSize(const QSize& targetSize, quint64 generation, bool authoritative) {
+    if (m_origin.isNull() || !targetSize.isValid() || targetSize.isEmpty()) {
+        return;
+    }
+
+    // 预览只缩放临时输入和灯条副本，原图坐标与工程数据始终保持不变。
+    const QImage renderOrigin = targetSize == m_origin.size()
+        ? m_origin
+        : m_origin.scaled(targetSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    const QVector<LEDStrip> renderLedStrips = ProgressiveRendering::scaleLedStrips(
+        m_ledStrips,
+        m_origin.size(),
+        renderOrigin.size());
+    const qreal renderScale = qMin(
+        static_cast<qreal>(renderOrigin.width()) / m_origin.width(),
+        static_cast<qreal>(renderOrigin.height()) / m_origin.height());
 
     // 获取参数
     QString maskColorName = combo_maskColor->currentText();
@@ -476,28 +525,38 @@ void MainWindow::updateProcess() {
             ? EdgeSharpener::OperationMode::StrokeCanny
             : EdgeSharpener::OperationMode::EdgeEnhance;
 
-    // 当不使用金属勾线时，不应把边缘直接绘制回源图（processedOrigin），
+    // 当不使用金属勾线时，不应把边缘直接绘制回本阶段输入图，
     // 否则会被 ImageProcessor 的像素分类放大/改变导致线变粗或误判。
-    // edgeMask 已在上方基于 processedOrigin 生成，用于在分类后覆盖为丝印。
+    // edgeMask 基于当前阶段输入生成，用于在分类后覆盖为丝印。
 
     int goldThresh = s_gold->value();
     int silkThresh = s_silk->value();
     int transThresh = s_trans->value();
-    int radVal = s_ledRad->value();
-    // Overlay switch is only for preview composition.
-    bool showOverlay = (check_lightEnable && check_lightEnable->isChecked() && check_showLEDOverlay && check_showLEDOverlay->isChecked());
+    const int radVal = qMax(1, qRound(s_ledRad->value() * renderScale));
+    // 灯光开关只影响预览合成图，不改变生产层内容。
+    const bool showOverlay = check_lightEnable
+        && check_lightEnable->isChecked()
+        && check_showLEDOverlay
+        && check_showLEDOverlay->isChecked();
 
     // 使用 ImageProcessor 处理图像
     QImage imgCopper, imgMask, imgSilk, imgBottom, imgComp;
 
-    // 如果边缘启用，预先基于 processedOrigin 生成边缘掩码（用于后续覆盖或铜层反映）
+    // 边缘掩码必须与当前预览分辨率一致，后续像素覆盖才不会错位。
     QImage edgeMask;
     if (check_edgeEnable && check_edgeEnable->isChecked()) {
-        edgeMask = m_edgeSharpener.buildEdgeMaskForImage(processedOrigin, edgeMode, s_edgeThresh->value(), s_edgeThreshMax->value(), m_edgePrefilterEnabled, m_edgePrefilterKernelSize, m_edgePrefilterSigma);
+        edgeMask = m_edgeSharpener.buildEdgeMaskForImage(
+            renderOrigin,
+            edgeMode,
+            s_edgeThresh->value(),
+            s_edgeThreshMax->value(),
+            m_edgePrefilterEnabled,
+            m_edgePrefilterKernelSize,
+            m_edgePrefilterSigma);
     }
 
     m_imageProcessor.processImage(
-        processedOrigin,
+        renderOrigin,
         goldThresh,
         silkThresh,
         transThresh,
@@ -516,8 +575,8 @@ void MainWindow::updateProcess() {
         imgSilk,
         imgBottom,
         imgComp,
-        m_ledStrips,
-        false // keep base composite clean; overlay is rendered by LEDLayoutEngine below
+        renderLedStrips,
+        false // 保持基础合成图干净，灯光由下方的 LED 布局引擎统一叠加。
     );
 
     // 若存在边缘掩码：
@@ -580,8 +639,9 @@ void MainWindow::updateProcess() {
         }
     }
 
-    // 生成生产层
-    m_layerGenerator.generateLayers(imgCopper, imgMask, imgSilk, imgBottom, m_layers);
+    // 所有阶段先写入预览层；只有原图阶段才会复制到可导出的生产层。
+    QMap<QString, QImage> renderedLayers;
+    m_layerGenerator.generateLayers(imgCopper, imgMask, imgSilk, imgBottom, renderedLayers);
 
     /*
     // 更新 UI 显示
@@ -594,8 +654,8 @@ void MainWindow::updateProcess() {
     if (showOverlay) {
         m_ledLayoutEngine.renderCompositeWithLEDs(
             imgComp,
-            m_ledStrips,
-            s_ledRad->value(),
+            renderLedStrips,
+            radVal,
             imgCopper,
             imgBottom,
             showOverlay,
@@ -604,14 +664,19 @@ void MainWindow::updateProcess() {
         );
     }
     m_previewComposite = imgComp;
+    m_previewLayers = renderedLayers;
     updateCompositePreview(m_previewComposite);
-    updateLayerPreview(l_copper, m_layers["Top_Copper"], m_layerPreviewStates[l_copper]);
-    updateLayerPreview(l_mask, m_layers["Top_Mask"], m_layerPreviewStates[l_mask]);
-    updateLayerPreview(l_silk, m_layers["Top_Silk"], m_layerPreviewStates[l_silk]);
-    updateLayerPreview(l_bottom, m_layers["Bottom_Mask"], m_layerPreviewStates[l_bottom]);
+    updateLayerPreview(l_copper, m_previewLayers["Top_Copper"], m_layerPreviewStates[l_copper]);
+    updateLayerPreview(l_mask, m_previewLayers["Top_Mask"], m_layerPreviewStates[l_mask]);
+    updateLayerPreview(l_silk, m_previewLayers["Top_Silk"], m_layerPreviewStates[l_silk]);
+    updateLayerPreview(l_bottom, m_previewLayers["Bottom_Mask"], m_layerPreviewStates[l_bottom]);
 
-    // 独立的灯条预览widget已移除，灯光在主预览上叠加显示
-    if (!m_isApplyingArgs) syncArgsToJson();
+    if (authoritative && renderOrigin.size() == m_origin.size()) {
+        // 只在完整阶段更新导出层和参数文件，避免保存到过渡帧或频繁写磁盘。
+        m_layers = renderedLayers;
+        m_fullResolutionGeneration = generation;
+        if (!m_isApplyingArgs) syncArgsToJson();
+    }
 }
 
 void MainWindow::clampPreviewPan(QLabel* label, const QImage& img, PreviewState& state) {
@@ -682,15 +747,23 @@ void MainWindow::updateCompositePreview(const QImage& img) {
 }
 
 bool MainWindow::mapLabelToImage(const QPoint& labelPos, QPoint& imgPos) const {
-    if (m_previewComposite.isNull() || !l_composite || l_composite->size().isEmpty()) return false;
+    if (m_previewComposite.isNull() || processedOrigin.isNull()
+        || !l_composite || l_composite->size().isEmpty()) return false;
 
     const QRectF drawRect = calcPreviewRect(l_composite->size(), m_previewComposite.size(), m_previewZoom, m_previewPan);
     if (!drawRect.contains(QPointF(labelPos))) return false;
 
     const double nx = (labelPos.x() - drawRect.left()) / drawRect.width();
     const double ny = (labelPos.y() - drawRect.top()) / drawRect.height();
-    const int x = qBound(0, static_cast<int>(std::floor(nx * m_previewComposite.width())), m_previewComposite.width() - 1);
-    const int y = qBound(0, static_cast<int>(std::floor(ny * m_previewComposite.height())), m_previewComposite.height() - 1);
+    // 低分辨率预览中的鼠标位置仍要映射回原图坐标，供 LED 工程数据使用。
+    const int x = qBound(
+        0,
+        static_cast<int>(std::floor(nx * processedOrigin.width())),
+        processedOrigin.width() - 1);
+    const int y = qBound(
+        0,
+        static_cast<int>(std::floor(ny * processedOrigin.height())),
+        processedOrigin.height() - 1);
     imgPos = QPoint(x, y);
     return true;
 }
@@ -828,7 +901,12 @@ bool MainWindow::handleLayerPreviewEvent(QLabel* label, QEvent* event, const QIm
         const double newZoom = qBound(0.2, oldZoom * factor, 8.0);
         if (std::abs(newZoom - oldZoom) < 1e-6) return true;
 
+        // Qt 6 使用浮点坐标 position()；保留 Qt 5 分支以兼容原项目工具链。
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        const QPoint cursorPos = we->position().toPoint();
+#else
         const QPoint cursorPos = we->pos();
+#endif
         const QRectF oldRect = calcPreviewRect(label->size(), img.size(), oldZoom, state.pan);
         state.zoom = newZoom;
 
@@ -889,7 +967,12 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
             const double newZoom = qBound(0.2, oldZoom * factor, 8.0);
             if (std::abs(newZoom - oldZoom) < 1e-6) return true;
 
+            // 主预览与图层预览采用相同的 Qt 5/Qt 6 鼠标坐标兼容逻辑。
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+            const QPoint cursorPos = we->position().toPoint();
+#else
             const QPoint cursorPos = we->pos();
+#endif
             const QRectF oldRect = calcPreviewRect(l_composite->size(), m_previewComposite.size(), oldZoom, m_previewPan);
 
             m_previewZoom = newZoom;
@@ -961,10 +1044,11 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
     }
 
     QLabel* label = qobject_cast<QLabel*>(obj);
-    if (label && m_layerPreviewKeys.contains(label) && !m_layers.isEmpty()) {
+    if (label && m_layerPreviewKeys.contains(label) && !m_previewLayers.isEmpty()) {
         const QString key = m_layerPreviewKeys.value(label);
-        if (m_layers.contains(key)) {
-            return handleLayerPreviewEvent(label, event, m_layers.value(key), m_layerPreviewStates[label]);
+        if (m_previewLayers.contains(key)) {
+            // 缩放和平移始终作用于当前可见阶段，不读取可能仍是旧代次的生产层。
+            return handleLayerPreviewEvent(label, event, m_previewLayers.value(key), m_layerPreviewStates[label]);
         }
     }
     return QMainWindow::eventFilter(obj, event);
@@ -1459,6 +1543,12 @@ void MainWindow::checkTempImageUpdated() {
 
 void MainWindow::exportLayers() {
     if (processedOrigin.isNull()) return;
+
+    if (m_fullResolutionGeneration != m_progressiveRenderController.currentGeneration()) {
+        // 用户在渐进阶段点击导出时，先同步补齐当前参数对应的原图生产层。
+        updateProcess();
+    }
+
     QString d = QFileDialog::getExistingDirectory(this, "选择导出目录");
     if (d.isEmpty()) return;
 
@@ -1489,10 +1579,31 @@ void MainWindow::resizeEvent(QResizeEvent *event) {
         updateProcess();
     }
 
-    if (l_copper && m_layers.contains("Top_Copper")) updateLayerPreview(l_copper, m_layers["Top_Copper"], m_layerPreviewStates[l_copper]);
-    if (l_mask && m_layers.contains("Top_Mask")) updateLayerPreview(l_mask, m_layers["Top_Mask"], m_layerPreviewStates[l_mask]);
-    if (l_silk && m_layers.contains("Top_Silk")) updateLayerPreview(l_silk, m_layers["Top_Silk"], m_layerPreviewStates[l_silk]);
-    if (l_bottom && m_layers.contains("Bottom_Mask")) updateLayerPreview(l_bottom, m_layers["Bottom_Mask"], m_layerPreviewStates[l_bottom]);
+    // 窗口尺寸变化只重绘当前可见阶段，不触发新的图像处理。
+    if (l_copper && m_previewLayers.contains("Top_Copper")) {
+        updateLayerPreview(
+            l_copper,
+            m_previewLayers["Top_Copper"],
+            m_layerPreviewStates[l_copper]);
+    }
+    if (l_mask && m_previewLayers.contains("Top_Mask")) {
+        updateLayerPreview(
+            l_mask,
+            m_previewLayers["Top_Mask"],
+            m_layerPreviewStates[l_mask]);
+    }
+    if (l_silk && m_previewLayers.contains("Top_Silk")) {
+        updateLayerPreview(
+            l_silk,
+            m_previewLayers["Top_Silk"],
+            m_layerPreviewStates[l_silk]);
+    }
+    if (l_bottom && m_previewLayers.contains("Bottom_Mask")) {
+        updateLayerPreview(
+            l_bottom,
+            m_previewLayers["Bottom_Mask"],
+            m_layerPreviewStates[l_bottom]);
+    }
 }
 
 void MainWindow::openPaintEditor() {

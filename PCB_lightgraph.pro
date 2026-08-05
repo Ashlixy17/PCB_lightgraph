@@ -10,6 +10,8 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 TARGET = PCB_lightgraph
 TEMPLATE = app
+# 渐进渲染调度器使用 lambda 和成员默认值，统一启用 C++11。
+CONFIG += c++11
 
 # The following define makes your compiler emit warnings if you use
 # any feature of Qt which as been marked as deprecated (the exact warnings
@@ -31,7 +33,9 @@ SOURCES += \
         gaussian_blur.cpp \
         dp_simplify.cpp \
         ledlayoutengine.cpp \
-        layergenerator.cpp
+        layergenerator.cpp \
+        progressiverendercontroller.cpp \
+        progressiverenderutils.cpp
 
 HEADERS += \
         mainwindow.h \
@@ -41,7 +45,9 @@ HEADERS += \
         dp_simplify.h \
         ledlayoutengine.h \
         layergenerator.h \
-        ledstrip.h
+        ledstrip.h \
+        progressiverendercontroller.h \
+        progressiverenderutils.h
 
 FORMS += \
         mainwindow.ui
