@@ -60,6 +60,9 @@ private:
      * @param authoritative 是否允许本阶段结果更新导出数据
      */
     void renderAtSize(const QSize& targetSize, quint64 generation, bool authoritative);
+    // 获取当前阶段稳定的渲染输入图像（同一源图+同一目标尺寸时复用缓存，
+    // 保证 EdgeSharpener/ImageProcessor 的 cacheKey 缓存能跨帧生效）。
+    QImage renderOriginForSize(const QSize& targetSize);
     QSlider* createSlider(QString title, int min, int max, int def, class QVBoxLayout* layout);
     float distanceToSegment(QPoint p, QPoint v, QPoint w);
     void updateCompositePreview(const QImage& img);
@@ -88,6 +91,12 @@ private:
     QImage m_previewComposite;
     // 记录生产层对应的渲染代次，导出前据此判断是否需要补做完整渲染。
     quint64 m_fullResolutionGeneration = 0;
+
+    // 渲染输入缓存：拖动滑块时目标尺寸不变，复用同一张缩放图像，
+    // 使下游基于 cacheKey 的缓存（EdgeSharpener/ImageProcessor）直接命中，
+    // 避免每一帧都重新缩放并因此使缓存全部失效。
+    quint64 m_cachedRenderOriginSourceKey = 0;
+    QImage m_cachedRenderOrigin;
 
     QPoint m_pendingStart;
     bool m_isPlacing = false;

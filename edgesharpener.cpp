@@ -15,6 +15,39 @@
 EdgeSharpener::EdgeSharpener() {}
 EdgeSharpener::~EdgeSharpener() {}
 
+QImage EdgeSharpener::acquireWorkingImage(
+    const QImage& srcImage,
+    bool enablePreFilter,
+    int gaussianKernelSize,
+    double gaussianSigma) {
+
+    // 只有源图或预滤波参数变化时才重新高斯滤波并更新工作图缓存；
+    // 拖动边缘阈值等操作时参数不变的帧直接复用 m_workImage，
+    // 让 buildCacheIfNeeded 看到的 cacheKey 保持稳定，避免每帧重建灰度/积分图。
+    const bool configChanged =
+        srcImage.cacheKey()  != m_cachedWorkSourceKey
+        || srcImage.width()  != m_cachedWorkW
+        || srcImage.height() != m_cachedWorkH
+        || enablePreFilter     != m_cachedWorkPrefilterEnabled
+        || gaussianKernelSize  != m_cachedWorkKernelSize
+        || std::abs(gaussianSigma - m_cachedWorkSigma) > 1e-6;
+    if (!configChanged && !m_workImage.isNull()) {
+        return m_workImage;
+    }
+
+    // 记录当前配置并重新生成工作图（启用预滤波则先高斯降噪，否则直接用源图）。
+    m_cachedWorkSourceKey = srcImage.cacheKey();
+    m_cachedWorkW = srcImage.width();
+    m_cachedWorkH = srcImage.height();
+    m_cachedWorkPrefilterEnabled = enablePreFilter;
+    m_cachedWorkKernelSize = gaussianKernelSize;
+    m_cachedWorkSigma = gaussianSigma;
+    m_workImage = enablePreFilter
+        ? applyGaussianBlur(srcImage, gaussianKernelSize, gaussianSigma)
+        : srcImage;
+    return m_workImage;
+}
+
 void EdgeSharpener::buildCacheIfNeeded(const QImage& srcImage) {
     if (srcImage.isNull()) return;
     quint64 key = srcImage.cacheKey();
@@ -258,7 +291,8 @@ QImage EdgeSharpener::processEdgeOperation(const QImage& srcImage,
     bool enableDouglasPeucker,double dpTolerance,int dpLineWidth) {
 
     if (srcImage.isNull()) return QImage();
-    QImage working = enablePreFilter ? applyGaussianBlur(srcImage, gaussianKernelSize, gaussianSigma) : srcImage;
+    // 通过工作图缓存获取稳定的预处理输入，避免拖动时每帧重建缓存。
+    const QImage working = acquireWorkingImage(srcImage, enablePreFilter, gaussianKernelSize, gaussianSigma);
     buildCacheIfNeeded(working);
     int w = m_cachedW; int h = m_cachedH;
     QImage result = srcImage.convertToFormat(QImage::Format_ARGB32);
@@ -310,7 +344,8 @@ QImage EdgeSharpener::processEdgeOperation(const QImage& srcImage,
 
 QImage EdgeSharpener::buildEdgeMaskForImage(const QImage& srcImage, OperationMode mode, int edgeThreshMin, int edgeThreshMax, bool enablePreFilter, int gaussianKernelSize, double gaussianSigma) {
     if (srcImage.isNull()) return QImage();
-    QImage working = enablePreFilter ? applyGaussianBlur(srcImage, gaussianKernelSize, gaussianSigma) : srcImage;
+    // 通过工作图缓存获取稳定的预处理输入，避免拖动时每帧重建缓存。
+    const QImage working = acquireWorkingImage(srcImage, enablePreFilter, gaussianKernelSize, gaussianSigma);
     buildCacheIfNeeded(working);
     if (mode == OperationMode::StrokeCanny) return buildCannyMask(edgeThreshMin, edgeThreshMax);
     return buildLaplacianMask(edgeThreshMin, edgeThreshMax);

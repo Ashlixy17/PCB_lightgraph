@@ -486,15 +486,36 @@ void MainWindow::updateProcess() {
     renderAtSize(m_origin.size(), generation, true);
 }
 
+QImage MainWindow::renderOriginForSize(const QSize& targetSize) {
+    // 目标尺寸与源图一致时直接返回原图，不参与缩放缓存（全分辨率阶段没有缩放开销）。
+    if (targetSize == m_origin.size()) {
+        // 原图已改变，旧的缩放缓存不再有效，主动丢弃以释放内存。
+        m_cachedRenderOrigin = QImage();
+        return m_origin;
+    }
+
+    // 缓存键 = 源图标识 + 目标尺寸：拖动期间目标尺寸几乎不变，
+    // 复用同一张缩放图即可让 EdgeSharpener/ImageProcessor 的缓存命中。
+    const quint64 sourceKey = m_origin.cacheKey();
+    if (!m_cachedRenderOrigin.isNull()
+        && m_cachedRenderOriginSourceKey == sourceKey
+        && m_cachedRenderOrigin.size() == targetSize) {
+        return m_cachedRenderOrigin;
+    }
+
+    // 源图或目标尺寸变化时重建缓存，并同步记录源图标识用于失效判断。
+    m_cachedRenderOriginSourceKey = sourceKey;
+    m_cachedRenderOrigin = m_origin.scaled(targetSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    return m_cachedRenderOrigin;
+}
+
 void MainWindow::renderAtSize(const QSize& targetSize, quint64 generation, bool authoritative) {
     if (m_origin.isNull() || !targetSize.isValid() || targetSize.isEmpty()) {
         return;
     }
 
     // 预览只缩放临时输入和灯条副本，原图坐标与工程数据始终保持不变。
-    const QImage renderOrigin = targetSize == m_origin.size()
-        ? m_origin
-        : m_origin.scaled(targetSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    const QImage renderOrigin = renderOriginForSize(targetSize);
     const QVector<LEDStrip> renderLedStrips = ProgressiveRendering::scaleLedStrips(
         m_ledStrips,
         m_origin.size(),
@@ -1168,6 +1189,9 @@ bool MainWindow::loadImageFromPath(const QString& filePath, bool alreadyInTemp) 
     }
 
     m_origin = loaded.convertToFormat(QImage::Format_RGB32);
+    // 源图更换后立即作废旧缩放缓存，避免残留上一张图的预览输入导致串图。
+    m_cachedRenderOrigin = QImage();
+    m_cachedRenderOriginSourceKey = 0;
     m_tempImagePath = sourcePath;
     m_previewZoom = 1.0;
     m_previewPan = QPointF(0, 0);
