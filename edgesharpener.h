@@ -83,6 +83,19 @@ private:
     QVector<int> m_cannyNms;        // 非极大值抑制后的梯度
     bool m_cannyCacheReady = false;
 
+    // 预处理工作图缓存：源图与预滤波参数不变时复用同一张工作图，
+    // 使 m_cachedImageKey 稳定，避免拖动边缘滑块时每帧重复高斯滤波并重建派生缓存。
+    QImage m_workImage;
+    quint64 m_cachedWorkSourceKey = 0;
+    int m_cachedWorkW = 0;
+    int m_cachedWorkH = 0;
+    bool m_cachedWorkPrefilterEnabled = true;
+    int m_cachedWorkKernelSize = 0;
+    double m_cachedWorkSigma = 0.0;
+
+    // 获取稳定的预处理工作图（缓存命中时直接返回，配置变化时才重建）
+    QImage acquireWorkingImage(const QImage& srcImage, bool enablePreFilter, int gaussianKernelSize, double gaussianSigma);
+
     // 构建或重建缓存（在源图像改变时调用）
     void buildCacheIfNeeded(const QImage& srcImage);
     void buildCannyCacheIfNeeded();
