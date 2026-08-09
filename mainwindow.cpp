@@ -134,6 +134,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 MainWindow::~MainWindow() {
     if (m_tempReloadTimer) m_tempReloadTimer->stop();
     cleanupTempImages();
+    // 改动：退出时删除本实例专属的临时目录（temp/<PID>/）。
+    // 原因：临时目录已按进程隔离，若不清理会残留孤儿目录；
+    // 目的：保证每次退出后只留下干净的 temp 根目录，不互相干扰其他实例。
+    if (!m_tempDirPath.isEmpty()) {
+        QDir(m_tempDirPath).removeRecursively();
+    }
 }
 
 void MainWindow::setupUI() {
@@ -1207,8 +1213,13 @@ bool MainWindow::loadImageFromPath(const QString& filePath, bool alreadyInTemp) 
 }
 
 void MainWindow::initTempWorkspace() {
+    // 改动：临时工作目录从固定的 temp/ 改为按进程隔离的 temp/<PID>/。
+    // 原因：原实现所有实例共用同一个 temp 目录与固定的 source.*/args.json 文件名，
+    //       多实例同时运行时会发生互相删图、互相覆盖参数、自动重载串图等问题；
+    // 目的：每个实例使用独立的临时目录，互不干扰，彻底隔离导入/编辑/保存的副作用。
     if (m_tempDirPath.isEmpty()) {
-        m_tempDirPath = QDir(QCoreApplication::applicationDirPath()).filePath("temp");
+        m_tempDirPath = QDir(QCoreApplication::applicationDirPath())
+                            .filePath(QString("temp/%1").arg(QCoreApplication::applicationPid()));
     }
     QDir tempDir(m_tempDirPath);
     if (!tempDir.exists()) {
