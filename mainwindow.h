@@ -17,6 +17,7 @@
 class QAction;
 class QTimer;
 class QPropertyAnimation;
+class QMenu;
 #include "imageprocessor.h"
 #include "edgesharpener.h"
 #include "ledlayoutengine.h"
@@ -51,6 +52,8 @@ private slots:
     void autoSuggestLEDs();
     void openFilterPreprocessDialog();
     void openDouglasPeuckerDialog();
+    void openColorSettingsDialog();
+    void resetAllSettings();
 
 private:
     void setupUI();
@@ -162,6 +165,7 @@ private:
     QMap<QGroupBox*, QWidget*> m_collapsibleGroups;       // 组框 -> 内容容器
     QMap<QGroupBox*, QCheckBox*> m_groupToggleCheckbox;   // 组框 -> 主开关（标题点击等价于点开关）
     QMap<QWidget*, QPropertyAnimation*> m_collapseAnims;  // 进行中的折叠动画
+    QMenu *m_scaleMenu = nullptr;                         // 界面缩放菜单（重置设置后同步勾选态）
 
     // 子模块实例
     ImageProcessor m_imageProcessor;

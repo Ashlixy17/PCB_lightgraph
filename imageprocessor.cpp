@@ -44,36 +44,59 @@ QColor ImageProcessor::getSilkColor(const QString& maskColorName) {
     return Qt::white;
 }
 
+// 自定义色值默认值：沉金 / OSP(#F0AA93) / 喷锡 / 裸露基材
+QColor ImageProcessor::s_customEnig = QColor(240, 217, 140);
+QColor ImageProcessor::s_customOsp = QColor(240, 170, 147);
+QColor ImageProcessor::s_customHasl = QColor(200, 200, 215);
+QColor ImageProcessor::s_customBare = QColor(153, 187, 119);
+
+QColor ImageProcessor::getCustomEnigColor()          { return s_customEnig; }
+QColor ImageProcessor::getCustomOspColor()           { return s_customOsp; }
+QColor ImageProcessor::getCustomHaslColor()          { return s_customHasl; }
+QColor ImageProcessor::getCustomBareSubstrateColor() { return s_customBare; }
+void ImageProcessor::setCustomEnigColor(const QColor& c)          { if (c.isValid()) s_customEnig = c; }
+void ImageProcessor::setCustomOspColor(const QColor& c)           { if (c.isValid()) s_customOsp = c; }
+void ImageProcessor::setCustomHaslColor(const QColor& c)          { if (c.isValid()) s_customHasl = c; }
+void ImageProcessor::setCustomBareSubstrateColor(const QColor& c) { if (c.isValid()) s_customBare = c; }
+
 QColor ImageProcessor::getMetalRenderColor(const QString& finishType) {
-    bool isHASL = finishType.contains("喷锡");
-    // 原先的沉金色: QColor(218, 165, 32);
-    return isHASL ? QColor(200, 200, 215) : QColor(240, 217, 140);
+    if (finishType.contains("喷锡")) return getCustomHaslColor();
+    if (finishType.contains("OSP")) return getCustomOspColor();
+    return getCustomEnigColor();
 }
 
 QColor ImageProcessor::getBareSubstrateColor() {
     // 原先的基材颜色: QColor(QStringLiteral("#A07D40"));
     // 使用 HSL(60, 30%, 62%) 显示: QColor::fromHsl(60, 77, 158);
     // 现在改为 rgb(153, 187, 119)
-    return QColor(153, 187, 119);
+    return getCustomBareSubstrateColor();
 }
 
 bool ImageProcessor::isMetal(
     const QColor& col,
-    bool isHASL,
+    const QString& finishType,
     int goldThresh,
     int saturationThresh,
     int valueThresh) {
 
-    if (!isHASL) {
-        // 沉金：检查色相是否接近金色
-        return (std::abs(col.hue() - goldThresh) < 25 &&
-                col.saturation() > saturationThresh &&
-                col.value() > valueThresh);
-    } else {
+    if (finishType.contains("喷锡")) {
         // 喷锡：检查是否为银色系
         bool isSilverHue = (col.saturation() < 40 || (col.hue() > 160 && col.hue() < 260));
         return isSilverHue && (col.value() > goldThresh);
     }
+
+    if (finishType.contains("OSP")) {
+        // OSP：色相接近自定义 OSP 色值（默认 #F0AA93，hue≈15°），逻辑与沉金一致
+        const int ospHue = getCustomOspColor().hue();
+        return (std::abs(col.hue() - ospHue) < 25 &&
+                col.saturation() > saturationThresh &&
+                col.value() > valueThresh);
+    }
+
+    // 沉金：检查色相是否接近金色
+    return (std::abs(col.hue() - goldThresh) < 25 &&
+            col.saturation() > saturationThresh &&
+            col.value() > valueThresh);
 }
 
 bool ImageProcessor::isBaseCacheValid(
@@ -173,7 +196,6 @@ void ImageProcessor::buildBaseLayers(
 
     QColor maskColor = getSolderMaskColor(maskColorName);
     QColor silkColor = getSilkColor(maskColorName);
-    bool isHASL = finishType.contains("喷锡");
     QColor metalRenderColor = getMetalRenderColor(finishType);
     QColor bareSubstrateColor = getBareSubstrateColor();
 
@@ -204,7 +226,7 @@ void ImageProcessor::buildBaseLayers(
             int gray = qGray(lineSrc[x]);
             int grayPct = qRound(gray * 100.0 / 255.0);
 
-            bool isMetalPixel = isMetal(col, isHASL, goldThresh);
+            bool isMetalPixel = isMetal(col, finishType, goldThresh);
             // 丝印判定：深色阻焊 = 源图亮像素（白墨印深色板）；
             // 白色阻焊 = 源图暗像素（黑墨印白板）——色彩逻辑与其他阻焊相反，
             // 保证输出明暗与源图一致（该白的地方白、该黑的地方黑）。

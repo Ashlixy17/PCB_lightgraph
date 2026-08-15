@@ -59,7 +59,7 @@ public:
      */
     static bool isMetal(
         const QColor& col,
-        bool isHASL,
+        const QString& finishType,
         int goldThresh,
         int saturationThresh = 50,
         int valueThresh = 70
@@ -75,7 +75,23 @@ public:
      */
     static QColor getBareSubstrateColor();
 
+    // ---- 自定义色值（本地持久化于 QSettings，与 .pcblg 工程无关）----
+    static QColor getCustomEnigColor();              // 沉金
+    static QColor getCustomOspColor();               // OSP
+    static QColor getCustomHaslColor();              // 喷锡
+    static QColor getCustomBareSubstrateColor();     // 裸露基材
+    static void setCustomEnigColor(const QColor& c);
+    static void setCustomOspColor(const QColor& c);
+    static void setCustomHaslColor(const QColor& c);
+    static void setCustomBareSubstrateColor(const QColor& c);
+
 private:
+    // 可自定义色值的静态存储（默认值定义见 imageprocessor.cpp）
+    static QColor s_customEnig;
+    static QColor s_customOsp;
+    static QColor s_customHasl;
+    static QColor s_customBare;
+
     void renderLEDOverlay(
         QImage& composite,
         const QImage& bottomMask,

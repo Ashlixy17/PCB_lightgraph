@@ -46,6 +46,7 @@
 #include <QPixmap>
 #include <QScrollArea>
 #include <QScroller>
+#include <QColorDialog>
 #include <cmath>
 #include <QDebug>
 
@@ -139,9 +140,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(m_tempReloadTimer, &QTimer::timeout, this, &MainWindow::checkTempImageUpdated);
     m_tempReloadTimer->start(1200);
 
-    setWindowTitle("PCB 艺术透光画拆分工具v1.5 https://github.com/tomatorigid/PCB_lightgraph");
+    setWindowTitle("PCB_lightgraphv1.5");
     // 运行时窗口图标：使用随程序打包的圆角 logo（多尺寸 ICO 资源）
     setWindowIcon(QIcon(QStringLiteral(":/icons/logo.ico")));
+
+    // 加载本地自定义色值（QSettings 持久化，与 .pcblg 工程无关）
+    QSettings s;
+    ImageProcessor::setCustomEnigColor(s.value(QStringLiteral("colors/enig"), ImageProcessor::getCustomEnigColor()).value<QColor>());
+    ImageProcessor::setCustomOspColor(s.value(QStringLiteral("colors/osp"), ImageProcessor::getCustomOspColor()).value<QColor>());
+    ImageProcessor::setCustomHaslColor(s.value(QStringLiteral("colors/hasl"), ImageProcessor::getCustomHaslColor()).value<QColor>());
+    ImageProcessor::setCustomBareSubstrateColor(s.value(QStringLiteral("colors/bare"), ImageProcessor::getCustomBareSubstrateColor()).value<QColor>());
 }
 
 MainWindow::~MainWindow() {
@@ -189,7 +197,7 @@ void MainWindow::setupUI() {
     basicLayout->setContentsMargins(9, 4, 9, 9);
     basicLayout->addWidget(basicContent);
     combo_surfaceFinish = new QComboBox();
-    combo_surfaceFinish->addItems({"沉金/OSP (金黄色)", "喷锡 (银色)"});
+    combo_surfaceFinish->addItems({"沉金 (金黄色)", "喷锡 (银色)", "OSP (玫瑰金)"});
     // 当表面处理变更时，除了更新处理外，还要确保边缘面板的金属勾线状态被正确同步
     connect(combo_surfaceFinish, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](int){
         if (check_useMetalEdge && s_autoInvert) s_autoInvert->setEnabled(!check_useMetalEdge->isChecked());
@@ -402,7 +410,7 @@ void MainWindow::setupUI() {
     QHBoxLayout *actionButtonsLayout = new QHBoxLayout;
 
     QPushButton *btn_import = new QPushButton("导入图纸");
-    btn_import->setMinimumHeight(50);
+    btn_import->setMinimumHeight(36); // 与导出按钮等高
     connect(btn_import, &QPushButton::clicked, this, &MainWindow::loadAndProcess);
 
     btn_export = new QPushButton("导出图纸");
@@ -507,11 +515,11 @@ void MainWindow::setupUI() {
 
     // 界面缩放：按比例缩放全局字体（立即生效、无需重启），
     // 防止小屏幕/高分屏下界面显示不全；选择会持久化，下次启动自动应用。
-    QMenu *scaleMenu = optionMenu->addMenu("界面缩放");
+    m_scaleMenu = optionMenu->addMenu("界面缩放");
     const double currentScale = QSettings().value(QStringLiteral("ui/scale"), 1.0).toDouble();
     const double scales[] = {0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5};
     for (double s : scales) {
-        QAction *act = scaleMenu->addAction(QStringLiteral("%1%").arg(qRound(s * 100)));
+        QAction *act = m_scaleMenu->addAction(QStringLiteral("%1%").arg(qRound(s * 100)));
         act->setCheckable(true);
         act->setChecked(qFuzzyCompare(s, currentScale));
         connect(act, &QAction::triggered, this, [s]() {
@@ -523,6 +531,14 @@ void MainWindow::setupUI() {
             qApp->setFont(f);
         });
     }
+
+    // 颜色设置：自定义沉金/OSP/喷锡/裸露基材显示色值（本地持久化，与 .pcblg 工程无关）
+    QAction *colorAction = optionMenu->addAction("颜色设置...");
+    connect(colorAction, &QAction::triggered, this, &MainWindow::openColorSettingsDialog);
+
+    // 重置所有本地设置（界面缩放 / 开屏提示 / 自定义色值）
+    QAction *resetAction = optionMenu->addAction("重置所有设置...");
+    connect(resetAction, &QAction::triggered, this, &MainWindow::resetAllSettings);
 }
 
 void MainWindow::toggleContent(QWidget *content, bool expand, bool horizontal) {
@@ -646,6 +662,152 @@ void MainWindow::showWelcomeDialog() {
     if (dontShow->isChecked()) {
         settings.setValue(QStringLiteral("ui/showWelcome"), false);
     }
+}
+
+void MainWindow::openColorSettingsDialog() {
+    struct ColorRow { QString name; QString key; QColor value; QPushButton *btn; };
+    // 与 imageprocessor.cpp 中的默认值保持一致
+    const QVector<QColor> defaults = {
+        QColor(240, 217, 140),   // 沉金
+        QColor(240, 170, 147),   // OSP #F0AA93
+        QColor(200, 200, 215),   // 喷锡
+        QColor(153, 187, 119)    // 裸露基材
+    };
+
+    QVector<ColorRow> rows;
+    rows.append(ColorRow{QStringLiteral("沉金"),        QStringLiteral("colors/enig"), ImageProcessor::getCustomEnigColor(),          nullptr});
+    rows.append(ColorRow{QStringLiteral("OSP"),         QStringLiteral("colors/osp"),  ImageProcessor::getCustomOspColor(),           nullptr});
+    rows.append(ColorRow{QStringLiteral("喷锡"),        QStringLiteral("colors/hasl"), ImageProcessor::getCustomHaslColor(),          nullptr});
+    rows.append(ColorRow{QStringLiteral("裸露基材"),    QStringLiteral("colors/bare"), ImageProcessor::getCustomBareSubstrateColor(), nullptr});
+
+    // 打开对话框时的初始值：供「还原」按钮恢复（与出厂默认值不同）
+    QVector<QColor> initialValues;
+    for (const ColorRow& r : rows) initialValues.append(r.value);
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("颜色设置"));
+    dlg.setModal(true);
+    dlg.setMinimumWidth(480);
+
+    QVBoxLayout *lay = new QVBoxLayout(&dlg);
+    lay->setSpacing(10);
+    lay->addWidget(new QLabel(QStringLiteral(
+        "自定义各工艺的显示色值（本地持久化，与 .pcblg 工程无关）：\n"
+        "修改 OSP 色值后，OSP 金属匹配色相也会跟随新色值。"), &dlg));
+
+    // 更新色块按钮（左侧小色块图标 + 右侧十六进制值）
+    auto updateSwatch = [](ColorRow& row) {
+        const QSize sz(24, 22); // 小色块，不覆盖文字
+        QPixmap pm(sz);
+        pm.fill(row.value);
+        row.btn->setIcon(QIcon(pm));
+        row.btn->setIconSize(sz);
+        row.btn->setText(row.value.name().toUpper());
+    };
+
+    for (int i = 0; i < rows.size(); ++i) {
+        QHBoxLayout *hl = new QHBoxLayout;
+        QLabel *nameLbl = new QLabel(rows[i].name, &dlg);
+        nameLbl->setMinimumWidth(80);
+        hl->addWidget(nameLbl);
+
+        rows[i].btn = new QPushButton(&dlg);
+        rows[i].btn->setFixedSize(150, 30); // 小色块图标 + 十六进制文字并排
+        rows[i].btn->setToolTip(QStringLiteral("点击选择颜色"));
+        hl->addWidget(rows[i].btn);
+
+        QPushButton *resetBtn = new QPushButton(QStringLiteral("重置"), &dlg);
+        resetBtn->setFixedWidth(64);
+        hl->addWidget(resetBtn);
+        hl->addStretch();
+        lay->addLayout(hl);
+
+        const int idx = i;
+        connect(rows[i].btn, &QPushButton::clicked, &dlg, [&rows, idx, &dlg, &updateSwatch]() {
+            QColor c = QColorDialog::getColor(rows[idx].value, &dlg,
+                                              QStringLiteral("选择颜色 - ") + rows[idx].name);
+            if (c.isValid()) {
+                rows[idx].value = c;
+                updateSwatch(rows[idx]);
+            }
+        });
+        connect(resetBtn, &QPushButton::clicked, &dlg, [&rows, idx, &defaults, &updateSwatch]() {
+            rows[idx].value = defaults[idx];
+            updateSwatch(rows[idx]);
+        });
+        updateSwatch(rows[i]);
+    }
+
+    QDialogButtonBox *box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    QPushButton *revertBtn = box->addButton(QStringLiteral("还原"), QDialogButtonBox::ResetRole);
+    QPushButton *resetAllBtn = box->addButton(QStringLiteral("全部恢复默认"), QDialogButtonBox::ResetRole);
+    connect(box, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(box, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    // 还原：恢复为打开对话框前已保存的色值
+    connect(revertBtn, &QPushButton::clicked, &dlg, [&rows, &initialValues, &updateSwatch]() {
+        for (int i = 0; i < rows.size(); ++i) {
+            rows[i].value = initialValues[i];
+            updateSwatch(rows[i]);
+        }
+    });
+    // 全部恢复默认：恢复为出厂默认色值
+    connect(resetAllBtn, &QPushButton::clicked, &dlg, [&rows, &defaults, &updateSwatch]() {
+        for (int i = 0; i < rows.size(); ++i) {
+            rows[i].value = defaults[i];
+            updateSwatch(rows[i]);
+        }
+    });
+    lay->addWidget(box);
+
+    if (dlg.exec() == QDialog::Accepted) {
+        QSettings s;
+        ImageProcessor::setCustomEnigColor(rows[0].value);
+        ImageProcessor::setCustomOspColor(rows[1].value);
+        ImageProcessor::setCustomHaslColor(rows[2].value);
+        ImageProcessor::setCustomBareSubstrateColor(rows[3].value);
+        s.setValue(QStringLiteral("colors/enig"), rows[0].value);
+        s.setValue(QStringLiteral("colors/osp"),  rows[1].value);
+        s.setValue(QStringLiteral("colors/hasl"), rows[2].value);
+        s.setValue(QStringLiteral("colors/bare"), rows[3].value);
+        if (!m_origin.isNull()) updateProcess(); // 有图时立即重新渲染应用新色值
+    }
+}
+
+void MainWindow::resetAllSettings() {
+    const QMessageBox::StandardButton ret = QMessageBox::question(
+        this,
+        QStringLiteral("重置所有设置"),
+        QStringLiteral("将清除所有本地设置（界面缩放、开屏提示、自定义色值）并恢复默认值。\n\n确定继续吗？"),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (ret != QMessageBox::Yes) return;
+
+    // 清空 QSettings 全部键（界面缩放 / 开屏提示 / 自定义色值）
+    QSettings s;
+    s.remove(QString());
+
+    // 恢复默认色值
+    ImageProcessor::setCustomEnigColor(QColor(240, 217, 140));
+    ImageProcessor::setCustomOspColor(QColor(240, 170, 147));
+    ImageProcessor::setCustomHaslColor(QColor(200, 200, 215));
+    ImageProcessor::setCustomBareSubstrateColor(QColor(153, 187, 119));
+
+    // 恢复默认字体（13px 微软雅黑），并同步缩放菜单勾选态
+    QFont f;
+    f.setFamily(QStringLiteral("Microsoft YaHei"));
+    f.setPixelSize(13);
+    f.setHintingPreference(QFont::PreferNoHinting);
+    qApp->setFont(f);
+    if (m_scaleMenu) {
+        for (QAction *act : m_scaleMenu->actions()) {
+            act->setChecked(act->text() == QStringLiteral("100%"));
+        }
+    }
+
+    // 有图时立即按默认色值重新渲染
+    if (!m_origin.isNull()) updateProcess();
+
+    QMessageBox::information(this, QStringLiteral("重置完成"),
+        QStringLiteral("所有设置已恢复默认（开屏提示将在下次启动时重新出现）。"));
 }
 
 QSlider* MainWindow::createSlider(QString title, int min, int max, int def, QVBoxLayout* layout) {
@@ -1811,7 +1973,10 @@ void MainWindow::exportLayers() {
     QString d = QFileDialog::getExistingDirectory(this, "选择导出目录");
     if (d.isEmpty()) return;
 
-    QString finishName = (combo_surfaceFinish->currentText().contains("沉金")) ? "ENIG" : "HASL";
+    const QString finishType = combo_surfaceFinish->currentText();
+    QString finishName = finishType.contains("沉金") ? "ENIG"
+                       : finishType.contains("OSP") ? "OSP"
+                       : "HASL";
 
     bool success = m_layerGenerator.exportLayersToFiles(m_layers, d, finishName, m_ledStrips);
 
