@@ -601,7 +601,7 @@ void MainWindow::showWelcomeDialog() {
     if (!settings.value(QStringLiteral("ui/showWelcome"), true).toBool()) return;
 
     QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("欢迎使用 PCB 透光画拆分工具"));
+    dlg.setWindowTitle(QStringLiteral("欢迎使用 PCB_lightgraph"));
     dlg.setModal(true);
     dlg.setMinimumWidth(680);
 
@@ -622,7 +622,7 @@ void MainWindow::showWelcomeDialog() {
     QVBoxLayout *rightLay = new QVBoxLayout;
     rightLay->setSpacing(8);
 
-    QLabel *titleLabel = new QLabel(QStringLiteral("<b style='font-size:16px;'>PCB 透光画拆分工具</b>"), &dlg);
+    QLabel *titleLabel = new QLabel(QStringLiteral("<b style='font-size:16px;'>PCB_lightgraph</b>"), &dlg);
     rightLay->addWidget(titleLabel);
 
     QLabel *guideLabel = new QLabel(QStringLiteral(
@@ -1989,7 +1989,7 @@ void MainWindow::exportLayers() {
         starBox.setWindowTitle(QStringLiteral("导出成功 🎉"));
         starBox.setText(QStringLiteral(
             "图纸已成功导出！\n\n"
-            "如果「PCB 透光画拆分工具」帮到了你，\n"
+            "如果「PCB_lightgraph」帮到了你，\n"
             "欢迎到 GitHub 点一个 Star 支持作者 ⭐\n\n"
             "https://github.com/tomatorigid/PCB_lightgraph"));
         QPushButton *starBtn = starBox.addButton(QStringLiteral("去 GitHub 点个 Star ⭐"), QMessageBox::AcceptRole);
