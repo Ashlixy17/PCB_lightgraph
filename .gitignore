@@ -30,6 +30,7 @@ ui_*.h
 Makefile*
 # Qt 本地构建目录及其编译缓存
 *build-*
+/build/
 *.qm
 *.prl
 

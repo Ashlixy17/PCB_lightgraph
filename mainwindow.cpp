@@ -27,6 +27,7 @@
 #include <QDir>
 #include <QDirIterator>
 #include <QCoreApplication>
+#include <QApplication>
 #include <QTimer>
 #include <QDateTime>
 #include <QJsonDocument>
@@ -35,6 +36,16 @@
 #include <QSaveFile>
 #include <QTemporaryDir>
 #include <QProcess>
+#include <QIcon>
+#include <QPropertyAnimation>
+#include <QEasingCurve>
+#include <QStyleOptionGroupBox>
+#include <QSettings>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QPixmap>
+#include <QScrollArea>
+#include <QScroller>
 #include <cmath>
 #include <QDebug>
 
@@ -128,7 +139,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(m_tempReloadTimer, &QTimer::timeout, this, &MainWindow::checkTempImageUpdated);
     m_tempReloadTimer->start(1200);
 
-    setWindowTitle("PCB 透光画拆分工具v1.4 https://github.com/tomatorigid/PCB_lightgraph");
+    setWindowTitle("PCB 艺术透光画拆分工具v1.5 https://github.com/tomatorigid/PCB_lightgraph");
+    // 运行时窗口图标：使用随程序打包的圆角 logo（多尺寸 ICO 资源）
+    setWindowIcon(QIcon(QStringLiteral(":/icons/logo.ico")));
 }
 
 MainWindow::~MainWindow() {
@@ -153,7 +166,8 @@ void MainWindow::setupUI() {
     l_composite->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     l_composite->setMinimumSize(400, 400); // 设置保底尺寸
     l_composite->setAlignment(Qt::AlignCenter); // 关键：居中显示，方便计算偏移
-    l_composite->setStyleSheet("border: 2px solid #FFD700; background: #1a1a1a;");
+    // Fluent 深色卡片样式（内联 QSS 会覆盖 QStyle 绘制，仅对纯容器控件使用）
+    l_composite->setStyleSheet("QLabel { background-color: #232323; border-radius: 10px; }");
     l_composite->installEventFilter(this);
 
     leftLayout->addWidget(new QLabel("<b>【预览区】支持中建或右键拖动缩放（滚轮），左键点击画面手动布灯</b>"));
@@ -167,34 +181,42 @@ void MainWindow::setupUI() {
     ctrl->addWidget(new QLabel("<b>核心参数控制</b>"));
 
     QGroupBox *group_basic = new QGroupBox("基础参数");
+    // 内容包进容器，便于整块收起/展开动画
+    QWidget *basicContent = new QWidget(group_basic);
+    QVBoxLayout *basicContentLayout = new QVBoxLayout(basicContent);
+    basicContentLayout->setContentsMargins(0, 0, 0, 0);
     QVBoxLayout *basicLayout = new QVBoxLayout(group_basic);
+    basicLayout->setContentsMargins(9, 4, 9, 9);
+    basicLayout->addWidget(basicContent);
     combo_surfaceFinish = new QComboBox();
-    combo_surfaceFinish->addItems({"沉金 (亮金)", "喷锡 (银色)"});
+    combo_surfaceFinish->addItems({"沉金/OSP (金黄色)", "喷锡 (银色)"});
     // 当表面处理变更时，除了更新处理外，还要确保边缘面板的金属勾线状态被正确同步
     connect(combo_surfaceFinish, QOverload<int>::of(&QComboBox::currentIndexChanged), [=](int){
         if (check_useMetalEdge && s_autoInvert) s_autoInvert->setEnabled(!check_useMetalEdge->isChecked());
         updateProcess();
     });
-    basicLayout->addWidget(new QLabel("表面处理工艺:"));
-    basicLayout->addWidget(combo_surfaceFinish);
+    basicContentLayout->addWidget(new QLabel("表面处理工艺:"));
+    basicContentLayout->addWidget(combo_surfaceFinish);
 
     combo_maskColor = new QComboBox();
     combo_maskColor->addItems({"蓝色", "黑色", "红色", "绿色", "白色"});
     connect(combo_maskColor, SIGNAL(currentIndexChanged(int)), this, SLOT(updateProcess()));
-    basicLayout->addWidget(new QLabel("阻焊颜色:"));
-    basicLayout->addWidget(combo_maskColor);
+    basicContentLayout->addWidget(new QLabel("阻焊颜色:"));
+    basicContentLayout->addWidget(combo_maskColor);
 
-    s_gold   = createSlider("金色/银色判定", 0, 359, 45, basicLayout);
-    s_silk   = createSlider("丝印阈值", 0, 255, 180, basicLayout);
-    s_trans  = createSlider("基材透光阈值", 0, 255, 120, basicLayout);
-    s_copperDepth = createSlider("敷铜层较深阈值", 0, 255, 150, basicLayout);
+    s_gold   = createSlider("金色/银色判定", 0, 359, 45, basicContentLayout);
+    s_silk   = createSlider("丝印阈值", 0, 255, 180, basicContentLayout);
+    s_trans  = createSlider("基材透光阈值", 0, 255, 120, basicContentLayout);
+    s_copperDepth = createSlider("敷铜层较深阈值", 0, 255, 150, basicContentLayout);
     ctrl->addWidget(group_basic);
+    m_collapsibleGroups.insert(group_basic, basicContent);
+    group_basic->installEventFilter(this);
 
     QGroupBox *group_light = new QGroupBox("灯光 / 显示 / 布灯");
     QVBoxLayout *lightLayout = new QVBoxLayout(group_light);
-    check_lightEnable = new QCheckBox("启用灯光设置");
+    check_lightEnable = new QCheckBox(group_light);
     check_lightEnable->setChecked(false);
-    lightLayout->addWidget(check_lightEnable);
+    check_lightEnable->hide(); // 功能开关已并入分组展开状态：展开=启用，收起=关闭
 
     QWidget *lightDetailWidget = new QWidget(group_light);
     QVBoxLayout *lightDetailLayout = new QVBoxLayout(lightDetailWidget);
@@ -215,18 +237,23 @@ void MainWindow::setupUI() {
     ctrl->addWidget(group_light);
 
     auto updateLightDetailState = [=]() {
-        lightDetailWidget->setVisible(check_lightEnable->isChecked());
+        toggleContent(lightDetailWidget, check_lightEnable->isChecked());
     };
     connect(check_lightEnable, &QCheckBox::toggled, [=](bool){
         updateLightDetailState();
         updateProcess();
     });
-    updateLightDetailState();
+    // 初始状态：直接收起（不播动画）
+    lightDetailWidget->setMaximumHeight(0);
+    lightDetailWidget->hide();
+    m_collapsibleGroups.insert(group_light, lightDetailWidget);
+    m_groupToggleCheckbox.insert(group_light, check_lightEnable);
+    group_light->installEventFilter(this);
 
     QGroupBox *group_bareSubstrate = new QGroupBox("裸露基材绑定");
     QVBoxLayout *bareGroupLayout = new QVBoxLayout(group_bareSubstrate);
-    check_bareSubstrateEnable = new QCheckBox("启用裸露基材");
-    bareGroupLayout->addWidget(check_bareSubstrateEnable);
+    check_bareSubstrateEnable = new QCheckBox(group_bareSubstrate);
+    check_bareSubstrateEnable->hide(); // 功能开关已并入分组展开状态：展开=启用，收起=关闭
 
     QWidget *bareDetailWidget = new QWidget(group_bareSubstrate);
     QVBoxLayout *bareDetailLayout = new QVBoxLayout(bareDetailWidget);
@@ -260,7 +287,7 @@ void MainWindow::setupUI() {
         const bool masterEnabled = check_bareSubstrateEnable->isChecked();
         const bool grayMode = radio_bareSubstrateGray->isChecked();
 
-        bareDetailWidget->setVisible(masterEnabled);
+        toggleContent(bareDetailWidget, masterEnabled);
 
         radio_bareSubstrateGray->setEnabled(masterEnabled);
         radio_bareSubstrateColor->setEnabled(masterEnabled);
@@ -281,6 +308,12 @@ void MainWindow::setupUI() {
         updateBareSubstrateControlState();
         updateProcess();
     });
+    // 初始状态：直接收起（不播动画）
+    bareDetailWidget->setMaximumHeight(0);
+    bareDetailWidget->hide();
+    m_collapsibleGroups.insert(group_bareSubstrate, bareDetailWidget);
+    m_groupToggleCheckbox.insert(group_bareSubstrate, check_bareSubstrateEnable);
+    group_bareSubstrate->installEventFilter(this);
     updateBareSubstrateControlState();
 
     group_edgeOperation = new QGroupBox("边缘操作");
@@ -288,8 +321,8 @@ void MainWindow::setupUI() {
     edgeOpLayout->setContentsMargins(8, 8, 8, 8);
     edgeOpLayout->setSpacing(6);
 
-    check_edgeEnable = new QCheckBox("启用边缘操作");
-    edgeOpLayout->addWidget(check_edgeEnable);
+    check_edgeEnable = new QCheckBox(group_edgeOperation);
+    check_edgeEnable->hide(); // 功能开关已并入分组展开状态：展开=启用，收起=关闭
 
     QWidget *edgeDetailWidget = new QWidget(group_edgeOperation);
     QVBoxLayout *edgeDetailLayout = new QVBoxLayout(edgeDetailWidget);
@@ -323,11 +356,15 @@ void MainWindow::setupUI() {
     ctrl->addWidget(group_edgeOperation);
 
     // 初始化状态控制：总开关决定模式单选和共用滑条是否启用
-    edgeDetailWidget->setVisible(false);
+    edgeDetailWidget->setMaximumHeight(0);
+    edgeDetailWidget->hide();
+    m_collapsibleGroups.insert(group_edgeOperation, edgeDetailWidget);
+    m_groupToggleCheckbox.insert(group_edgeOperation, check_edgeEnable);
+    group_edgeOperation->installEventFilter(this);
 
     auto updateEdgeControlState = [=]() {
         const bool enabled = check_edgeEnable->isChecked();
-        edgeDetailWidget->setVisible(enabled);
+        toggleContent(edgeDetailWidget, enabled);
         // 当使用金属勾线时，自动反色范围不可用；裸露金属勾线仅在使用金属时显示
         if (check_useMetalEdge) {
             const bool useMetal = check_useMetalEdge->isChecked();
@@ -356,7 +393,12 @@ void MainWindow::setupUI() {
     updateEdgeControlState();
 
     QGroupBox *group_actions = new QGroupBox("图纸操作");
+    // 内容包进容器，便于整块收起/展开动画
+    QWidget *actionsContent = new QWidget(group_actions);
+    QVBoxLayout *actionsContentLayout = new QVBoxLayout(actionsContent);
+    actionsContentLayout->setContentsMargins(0, 0, 0, 0);
     QVBoxLayout *actionLayout = new QVBoxLayout(group_actions);
+    actionLayout->setContentsMargins(9, 4, 9, 9);
     QHBoxLayout *actionButtonsLayout = new QHBoxLayout;
 
     QPushButton *btn_import = new QPushButton("导入图纸");
@@ -365,13 +407,17 @@ void MainWindow::setupUI() {
 
     btn_export = new QPushButton("导出图纸");
     btn_export->setEnabled(false);
-    btn_export->setMinimumHeight(50);
-    btn_export->setStyleSheet("background-color: #2d5a2d; color: white; font-weight: bold;");
+    btn_export->setMinimumHeight(36);
+    // Fluent 强调色按钮（accent 属性由 FluentUI3Style 绘制，QSS 会覆盖样式）
+    btn_export->setProperty("accent", true);
     connect(btn_export, &QPushButton::clicked, this, &MainWindow::exportLayers);
     actionButtonsLayout->addWidget(btn_import);
     actionButtonsLayout->addWidget(btn_export);
-    actionLayout->addLayout(actionButtonsLayout);
+    actionsContentLayout->addLayout(actionButtonsLayout);
+    actionLayout->addWidget(actionsContent);
     ctrl->addWidget(group_actions);
+    m_collapsibleGroups.insert(group_actions, actionsContent);
+    group_actions->installEventFilter(this);
     ctrl->addStretch();
 
     // Checkbox: 展开右侧预览（默认不勾选）
@@ -388,7 +434,7 @@ void MainWindow::setupUI() {
         lbl->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
         lbl->setMinimumSize(200, 200);
         lbl->setAlignment(Qt::AlignCenter);
-        lbl->setStyleSheet("border: 1px dashed #555; background: #000;");
+        lbl->setStyleSheet("QLabel { border: 1px dashed #3a3a3a; background-color: #1e1e1e; border-radius: 8px; }");
         v->addWidget(lbl);
         return v;
     };
@@ -410,16 +456,28 @@ void MainWindow::setupUI() {
     QWidget *rightPanel = new QWidget;
     rightPanel->setLayout(rightGrid);
 
-    // 初始不展示（复选框默认不勾选）
-    rightPanel->setVisible(false);
+    // 初始不展示（复选框默认不勾选）；展开/收起带宽度动画
+    rightPanel->setMaximumWidth(0);
+    rightPanel->setMinimumWidth(0);
+    rightPanel->hide();
 
     mainLayout->addLayout(leftLayout, 4);
-    mainLayout->addLayout(ctrl, 1);
+    // 中间控制台放入可滚动区域：全部分组展开时一屏放不下，
+    // 支持鼠标滚轮 / 触控板 / 触摸屏上下滚动（类似编辑器）。
+    QWidget *ctrlContainer = new QWidget;
+    ctrlContainer->setLayout(ctrl);
+    QScrollArea *ctrlScroll = new QScrollArea;
+    ctrlScroll->setWidgetResizable(true);
+    ctrlScroll->setWidget(ctrlContainer);
+    ctrlScroll->setFrameShape(QFrame::NoFrame);
+    ctrlScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    QScroller::grabGesture(ctrlScroll->viewport(), QScroller::TouchGesture); // 触摸屏/触控板拖拽滚动
+    mainLayout->addWidget(ctrlScroll, 1);
     mainLayout->addWidget(rightPanel, 3);
 
-    // 切换展开时直接显示/隐藏右侧面板
+    // 切换展开时直接显示/隐藏右侧面板（带横向展开动画）
     connect(check_expandPreviews, &QCheckBox::toggled, [=](bool checked){
-        rightPanel->setVisible(checked);
+        toggleContent(rightPanel, checked, true);
     });
 
     setCentralWidget(central);
@@ -446,6 +504,148 @@ void MainWindow::setupUI() {
     connect(filterPreprocessAction, &QAction::triggered, this, &MainWindow::openFilterPreprocessDialog);
     QAction *dpAction = experimentalMenu->addAction("道格拉斯-普克抽稀");
     connect(dpAction, &QAction::triggered, this, &MainWindow::openDouglasPeuckerDialog);
+
+    // 界面缩放：按比例缩放全局字体（立即生效、无需重启），
+    // 防止小屏幕/高分屏下界面显示不全；选择会持久化，下次启动自动应用。
+    QMenu *scaleMenu = optionMenu->addMenu("界面缩放");
+    const double currentScale = QSettings().value(QStringLiteral("ui/scale"), 1.0).toDouble();
+    const double scales[] = {0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5};
+    for (double s : scales) {
+        QAction *act = scaleMenu->addAction(QStringLiteral("%1%").arg(qRound(s * 100)));
+        act->setCheckable(true);
+        act->setChecked(qFuzzyCompare(s, currentScale));
+        connect(act, &QAction::triggered, this, [s]() {
+            QSettings().setValue(QStringLiteral("ui/scale"), s);
+            QFont f;
+            f.setFamily(QStringLiteral("Microsoft YaHei"));
+            f.setPixelSize(qMax(8, qRound(13.0 * s)));
+            f.setHintingPreference(QFont::PreferNoHinting);
+            qApp->setFont(f);
+        });
+    }
+}
+
+void MainWindow::toggleContent(QWidget *content, bool expand, bool horizontal) {
+    if (!content) return;
+
+    // 取消进行中的动画，避免新旧动画竞争（如快速连点）
+    if (QPropertyAnimation *old = m_collapseAnims.value(content, nullptr)) {
+        old->stop();
+        m_collapseAnims.remove(content);
+        old->deleteLater();
+    }
+
+    const QByteArray propName = horizontal ? "maximumWidth" : "maximumHeight";
+    const int targetSize = horizontal ? content->sizeHint().width() : content->sizeHint().height();
+
+    if (expand) {
+        // 已展开（或正在展开）则无需处理
+        if (content->isVisible() && content->maximumWidth() != 0 && content->maximumHeight() != 0) return;
+        if (horizontal) { content->setMaximumWidth(0); content->setMinimumWidth(0); }
+        else { content->setMaximumHeight(0); }
+        content->show();
+        QPropertyAnimation *anim = new QPropertyAnimation(content, propName, this);
+        anim->setDuration(180);
+        anim->setEasingCurve(QEasingCurve::InOutCubic);
+        anim->setStartValue(0);
+        anim->setEndValue(targetSize);
+        connect(anim, &QPropertyAnimation::finished, this, [this, content, anim, horizontal, targetSize]() {
+            // 横向面板保持展开宽度（有 stretch 参与布局，复位会跳变）；纵向复位上限避免内容变化被裁剪
+            if (horizontal) content->setMaximumWidth(targetSize);
+            else content->setMaximumHeight(QWIDGETSIZE_MAX);
+            m_collapseAnims.remove(content);
+            anim->deleteLater();
+        });
+        m_collapseAnims.insert(content, anim);
+        anim->start();
+    } else {
+        if (content->isHidden()) return; // 已收起
+        const int startSize = horizontal ? content->width() : content->height();
+        if (startSize <= 0) return;
+        QPropertyAnimation *anim = new QPropertyAnimation(content, propName, this);
+        anim->setDuration(180);
+        anim->setEasingCurve(QEasingCurve::InOutCubic);
+        anim->setStartValue(startSize);
+        anim->setEndValue(0);
+        connect(anim, &QPropertyAnimation::finished, this, [this, content, anim, horizontal]() {
+            if (horizontal) content->setMaximumWidth(0);
+            else content->setMaximumHeight(0);
+            content->hide();
+            m_collapseAnims.remove(content);
+            anim->deleteLater();
+        });
+        m_collapseAnims.insert(content, anim);
+        anim->start();
+    }
+}
+
+void MainWindow::showWelcomeDialog() {
+    // 用户勾选过"以后不再出现"则跳过
+    QSettings settings;
+    if (!settings.value(QStringLiteral("ui/showWelcome"), true).toBool()) return;
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("欢迎使用 PCB 透光画拆分工具"));
+    dlg.setModal(true);
+    dlg.setMinimumWidth(680);
+
+    QHBoxLayout *mainLay = new QHBoxLayout(&dlg);
+    mainLay->setSpacing(20);
+    mainLay->setContentsMargins(20, 20, 20, 16);
+
+    // 左侧：高清 logo
+    QLabel *logoLabel = new QLabel(&dlg);
+    QPixmap logo(QStringLiteral(":/icons/logo_rounded.png"));
+    if (!logo.isNull()) {
+        logoLabel->setPixmap(logo.scaled(240, 240, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    }
+    logoLabel->setAlignment(Qt::AlignCenter);
+    mainLay->addWidget(logoLabel, 1);
+
+    // 右侧：标题 + 简洁教程 + 特性
+    QVBoxLayout *rightLay = new QVBoxLayout;
+    rightLay->setSpacing(8);
+
+    QLabel *titleLabel = new QLabel(QStringLiteral("<b style='font-size:16px;'>PCB 透光画拆分工具</b>"), &dlg);
+    rightLay->addWidget(titleLabel);
+
+    QLabel *guideLabel = new QLabel(QStringLiteral(
+        "<b>快速上手：</b><br>"
+        "① 点击「导入图纸」选择 PCB 照片<br>"
+        "② 按需展开分组调整参数<br>"
+        "③ 点击「导出图纸」生成分层生产图纸<br><br>"
+        "<b>画图实时编辑：</b><br>"
+        "菜单栏 File →「画图实时编辑」打开画图，可自由裁剪、修补，<br>"
+        "按 <b>Ctrl+S</b> 保存后自动实时同步到预览。<br><br>"
+        "<b>特性一览：</b><br>"
+        "• 自动重心布灯 / 灯光叠加预览<br>"
+        "• 边缘操作：描边 / 边缘增强 / 金属勾线<br>"
+        "• 参数分组点击标题即可展开/收起<br>"
+        "• Option → 界面缩放，适配不同屏幕"), &dlg);
+    guideLabel->setTextFormat(Qt::RichText);
+    guideLabel->setWordWrap(true);
+    rightLay->addWidget(guideLabel);
+    rightLay->addStretch();
+
+    // 底部：以后不再出现 + 开始使用
+    QHBoxLayout *bottomLay = new QHBoxLayout;
+    QCheckBox *dontShow = new QCheckBox(QStringLiteral("以后不再出现"), &dlg);
+    bottomLay->addWidget(dontShow);
+    bottomLay->addStretch();
+    QPushButton *okBtn = new QPushButton(QStringLiteral("开始使用"), &dlg);
+    okBtn->setProperty("accent", true);
+    okBtn->setMinimumWidth(110);
+    bottomLay->addWidget(okBtn);
+    rightLay->addLayout(bottomLay);
+
+    mainLay->addLayout(rightLay, 2);
+
+    connect(okBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+    dlg.exec();
+    // 无论以何种方式关闭，勾选过"以后不再出现"就持久化跳过
+    if (dontShow->isChecked()) {
+        settings.setValue(QStringLiteral("ui/showWelcome"), false);
+    }
 }
 
 QSlider* MainWindow::createSlider(QString title, int min, int max, int def, QVBoxLayout* layout) {
@@ -983,6 +1183,30 @@ bool MainWindow::handleLayerPreviewEvent(QLabel* label, QEvent* event, const QIm
 }
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
+    // 可折叠分组框：点击标题区展开/收起（带动画）
+    if (event->type() == QEvent::MouseButtonPress) {
+        QGroupBox *gb = qobject_cast<QGroupBox*>(obj);
+        if (gb && m_collapsibleGroups.contains(gb)) {
+            QMouseEvent *me = static_cast<QMouseEvent*>(event);
+            if (me->button() == Qt::LeftButton) {
+                QStyleOptionGroupBox opt;
+                opt.initFrom(gb);
+                opt.text = gb->title();
+                QRect labelRect = gb->style()->subControlRect(QStyle::CC_GroupBox, &opt, QStyle::SC_GroupBoxLabel, gb);
+                // 标题带内点击才触发，避免误触内容区
+                if (me->pos().y() <= qMax(labelRect.isValid() ? labelRect.bottom() : 0, 30)) {
+                    QCheckBox *cb = m_groupToggleCheckbox.value(gb, nullptr);
+                    if (cb) {
+                        cb->toggle();
+                    } else {
+                        QWidget *content = m_collapsibleGroups.value(gb, nullptr);
+                        if (content) toggleContent(content, content->isHidden());
+                    }
+                    return true;
+                }
+            }
+        }
+    }
     if (obj == l_composite && !processedOrigin.isNull()) {
         if (event->type() == QEvent::Wheel) {
             QWheelEvent *we = static_cast<QWheelEvent*>(event);
@@ -1593,6 +1817,22 @@ void MainWindow::exportLayers() {
 
     if (success) {
         QMessageBox::information(this, "导出成功", "图纸已导出，灯条参考图为透明底色。");
+
+        // 求 star 弹窗：导出成功后引导用户去 GitHub 支持
+        QMessageBox starBox(this);
+        starBox.setIcon(QMessageBox::Question);
+        starBox.setWindowTitle(QStringLiteral("导出成功 🎉"));
+        starBox.setText(QStringLiteral(
+            "图纸已成功导出！\n\n"
+            "如果「PCB 透光画拆分工具」帮到了你，\n"
+            "欢迎到 GitHub 点一个 Star 支持作者 ⭐\n\n"
+            "https://github.com/tomatorigid/PCB_lightgraph"));
+        QPushButton *starBtn = starBox.addButton(QStringLiteral("去 GitHub 点个 Star ⭐"), QMessageBox::AcceptRole);
+        starBox.addButton(QStringLiteral("下次再说"), QMessageBox::RejectRole);
+        starBox.exec();
+        if (starBox.clickedButton() == starBtn) {
+            QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/tomatorigid/PCB_lightgraph")));
+        }
     } else {
         QMessageBox::warning(this, "导出失败", "导出过程中发生错误，请检查目录权限。");
     }

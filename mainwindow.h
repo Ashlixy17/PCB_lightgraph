@@ -16,6 +16,7 @@
 #include <QGroupBox>
 class QAction;
 class QTimer;
+class QPropertyAnimation;
 #include "imageprocessor.h"
 #include "edgesharpener.h"
 #include "ledlayoutengine.h"
@@ -36,6 +37,7 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
     bool eventFilter(QObject *obj, QEvent *event) override;
+    void showWelcomeDialog(); // 启动欢迎弹窗（main.cpp 调用）
 protected:
     void resizeEvent(QResizeEvent *event) override;
 
@@ -63,6 +65,8 @@ private:
     // 获取当前阶段稳定的渲染输入图像（同一源图+同一目标尺寸时复用缓存，
     // 保证 EdgeSharpener/ImageProcessor 的 cacheKey 缓存能跨帧生效）。
     QImage renderOriginForSize(const QSize& targetSize);
+    // 内容容器展开/收起动画（maximumHeight/Width 动画，180ms InOutCubic；horizontal=true 时横向）
+    void toggleContent(QWidget *content, bool expand, bool horizontal = false);
     QSlider* createSlider(QString title, int min, int max, int def, class QVBoxLayout* layout);
     float distanceToSegment(QPoint p, QPoint v, QPoint w);
     void updateCompositePreview(const QImage& img);
@@ -153,6 +157,11 @@ private:
     QTimer *m_tempReloadTimer = nullptr;
     qint64 m_tempImageMTimeMs = -1;
     qint64 m_tempImageSize = -1;
+
+    // 可折叠分组框：标题点击展开/收起（带动画）
+    QMap<QGroupBox*, QWidget*> m_collapsibleGroups;       // 组框 -> 内容容器
+    QMap<QGroupBox*, QCheckBox*> m_groupToggleCheckbox;   // 组框 -> 主开关（标题点击等价于点开关）
+    QMap<QWidget*, QPropertyAnimation*> m_collapseAnims;  // 进行中的折叠动画
 
     // 子模块实例
     ImageProcessor m_imageProcessor;
