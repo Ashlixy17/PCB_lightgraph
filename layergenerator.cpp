@@ -19,10 +19,14 @@ void LayerGenerator::applyEDACalibrationPatch(QImage& img) {
     int w = img.width();
     int h = img.height();
 
-    // 左上角锚点
+    // 空的/无效图像直接返回，避免后续 setPixel 越界写内存
+    if (w <= 0 || h <= 0) return;
+
+    // 左上角锚点：逐个判断坐标是否落在图像范围内，
+    // 防止 1×1、1×N、N×1 等极小尺寸图像触发越界写像素（未定义行为）
     img.setPixel(0, 0, 1);
-    img.setPixel(0, 1, 0);
-    img.setPixel(1, 0, 0);
+    if (h > 1) img.setPixel(0, 1, 0);
+    if (w > 1) img.setPixel(1, 0, 0);
 
     // 右下角锚点
     if (w > 1 && h > 1) {

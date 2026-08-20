@@ -26,6 +26,7 @@
 #include <QGroupBox>
 #include <QDir>
 #include <QDirIterator>
+#include <QStandardPaths>
 #include <QCoreApplication>
 #include <QApplication>
 #include <QTimer>
@@ -1244,7 +1245,9 @@ void MainWindow::openDouglasPeuckerDialog() {
     QHBoxLayout *tolLay = new QHBoxLayout;
     QLabel *tolLabel = new QLabel("抽稀容忍度 (epsilon):");
     QDoubleSpinBox *tolSpin = new QDoubleSpinBox;
-    tolSpin->setRange(0.0, 1000.0);
+    // 容忍度下限设为极小正数：eps=0 会让道格拉斯-普克递归不收敛（栈溢出），
+    // 因此不允许用户调到 0，下限与 douglasPeuckerSimplify 内部的保护阈值保持一致。
+    tolSpin->setRange(0.001, 1000.0);
     tolSpin->setDecimals(3);
     tolSpin->setSingleStep(0.1);
     tolSpin->setValue(m_dpTolerance);
@@ -1603,13 +1606,22 @@ void MainWindow::initTempWorkspace() {
     // 原因：原实现所有实例共用同一个 temp 目录与固定的 source.*/args.json 文件名，
     //       多实例同时运行时会发生互相删图、互相覆盖参数、自动重载串图等问题；
     // 目的：每个实例使用独立的临时目录，互不干扰，彻底隔离导入/编辑/保存的副作用。
+    // 注意：临时目录不能放在应用程序目录下——打包安装到 Program Files 等只读位置时，
+    //       mkpath/文件复制会静默失败，导致导入/保存/画图实时编辑全部不可用；
+    //       因此改用系统临时目录(QStandardPaths::TempLocation)，仍按 PID 隔离。
     if (m_tempDirPath.isEmpty()) {
-        m_tempDirPath = QDir(QCoreApplication::applicationDirPath())
-                            .filePath(QString("temp/%1").arg(QCoreApplication::applicationPid()));
+        const QString sysTemp = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+        // 系统临时目录不可用（返回空串）时回退到应用程序目录，保证功能仍能尝试运行
+        const QString baseDir = sysTemp.isEmpty() ? QCoreApplication::applicationDirPath() : sysTemp;
+        m_tempDirPath = QDir(baseDir)
+                            .filePath(QString("PCB_lightgraph/%1").arg(QCoreApplication::applicationPid()));
     }
     QDir tempDir(m_tempDirPath);
     if (!tempDir.exists()) {
-        tempDir.mkpath(".");
+        // 创建失败（如权限不足）时打印警告，后续文件操作会给出对应的错误提示
+        if (!tempDir.mkpath(".")) {
+            qWarning() << "无法创建临时工作目录:" << m_tempDirPath;
+        }
     }
     m_tempArgsPath = tempDir.filePath("args.json");
 }
@@ -1812,27 +1824,37 @@ bool MainWindow::loadArgsFromJson(const QString& argsPath) {
     setCheck(check_useMetalEdge, controls.value("useMetalEdge").toBool(check_useMetalEdge ? check_useMetalEdge->isChecked() : false));
     setCheck(check_exposeMetalEdge, controls.value("exposeMetalEdge").toBool(check_exposeMetalEdge ? check_exposeMetalEdge->isChecked() : true));
 
+    // 工程文件(.pcblg)属外部输入，必须对实验性参数做范围校验，防止 0/负值/超大值流入图像处理管线：
+    // sigma=0 会让高斯核除零产生 NaN，eps<=0 会让道格拉斯-普克递归不收敛，均可能导致崩溃或图像损坏。
     m_edgePrefilterEnabled = experimental.value("edgePrefilterEnabled").toBool(m_edgePrefilterEnabled);
-    m_edgePrefilterKernelSize = experimental.value("edgePrefilterKernelSize").toInt(m_edgePrefilterKernelSize);
-    m_edgePrefilterSigma = experimental.value("edgePrefilterSigma").toDouble(m_edgePrefilterSigma);
+    m_edgePrefilterKernelSize = qBound(3, experimental.value("edgePrefilterKernelSize").toInt(m_edgePrefilterKernelSize), 7);
+    if ((m_edgePrefilterKernelSize % 2) == 0) --m_edgePrefilterKernelSize; // 高斯核需为奇数，偶数时向下取最近的奇数
+    m_edgePrefilterSigma = qMax(0.001, experimental.value("edgePrefilterSigma").toDouble(m_edgePrefilterSigma));
     m_dpEnabled = experimental.value("dpEnabled").toBool(m_dpEnabled);
-    m_dpTolerance = experimental.value("dpTolerance").toDouble(m_dpTolerance);
-    m_dpLineWidth = experimental.value("dpLineWidth").toInt(m_dpLineWidth);
+    m_dpTolerance = qMax(0.001, experimental.value("dpTolerance").toDouble(m_dpTolerance));
+    m_dpLineWidth = qBound(1, experimental.value("dpLineWidth").toInt(m_dpLineWidth), 50);
 
     m_ledStrips.clear();
     const QJsonArray strips = root.value("ledStrips").toArray();
+    // 灯条坐标/半径/颜色分量同样夹到合法范围内，避免非法工程数据在渲染或导出时越界或产生异常图形。
+    const int imgW = m_origin.width();
+    const int imgH = m_origin.height();
     for (const QJsonValue& v : strips) {
         if (!v.isObject()) continue;
         const QJsonObject o = v.toObject();
         LEDStrip s;
-        s.start = QPoint(o.value("startX").toInt(), o.value("startY").toInt());
-        s.end = QPoint(o.value("endX").toInt(), o.value("endY").toInt());
-        s.radius = o.value("radius").toInt(s_ledRad ? s_ledRad->value() : 150);
+        s.start = QPoint(
+            qBound(0, o.value("startX").toInt(), qMax(0, imgW - 1)),
+            qBound(0, o.value("startY").toInt(), qMax(0, imgH - 1)));
+        s.end = QPoint(
+            qBound(0, o.value("endX").toInt(), qMax(0, imgW - 1)),
+            qBound(0, o.value("endY").toInt(), qMax(0, imgH - 1)));
+        s.radius = qBound(1, o.value("radius").toInt(s_ledRad ? s_ledRad->value() : 150), 500);
         s.color = QColor(
-            o.value("r").toInt(255),
-            o.value("g").toInt(255),
-            o.value("b").toInt(255),
-            o.value("a").toInt(255)
+            qBound(0, o.value("r").toInt(255), 255),
+            qBound(0, o.value("g").toInt(255), 255),
+            qBound(0, o.value("b").toInt(255), 255),
+            qBound(0, o.value("a").toInt(255), 255)
         );
         m_ledStrips.append(s);
     }

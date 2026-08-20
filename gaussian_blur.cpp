@@ -12,6 +12,9 @@ static int clampOddKernelSize(int kernelSize) {
 
 static QVector<double> buildGaussian1DKernel(int kernelSize, double sigma) {
     kernelSize = clampOddKernelSize(kernelSize);
+    // 防止 sigma 为 0 或负数时 twoSigma2 变成 0，使 exp(-(i*i)/twoSigma2) 出现除零产生 NaN；
+    // 核权重一旦变成 NaN，随后 static_cast<int>(NaN) 属于未定义行为，会产出损坏图像甚至崩溃。
+    sigma = qMax(sigma, 1e-3);
     int radius = kernelSize / 2;
     QVector<double> w(kernelSize);
     const double twoSigma2 = 2.0 * sigma * sigma;

@@ -53,6 +53,9 @@ static double perpendicularDistance(const QPoint& a, const QPoint& b, const QPoi
 
 void douglasPeuckerSimplify(const QVector<QPoint>& pts, double eps, QVector<QPoint>& out) {
     if (pts.size() < 3) { out = pts; return; }
+    // 防御性保护：eps<=0 时 distMax > eps 恒成立，递归永不收敛，
+    // 长连通分量会导致调用栈溢出崩溃；夹到极小正数保证递归一定能终止。
+    if (eps <= 0.0) eps = 1e-3;
     int n = pts.size();
     int idxMax = 0; double distMax = 0.0;
     for (int i = 1; i < n-1; ++i) {
