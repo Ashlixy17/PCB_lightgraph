@@ -71,10 +71,10 @@
 #include "qstylehelper_p.h"
 #include "qstyleoption.h"
 
-#if QT_VERSION <= QT_VERSION_CHECK( 6, 8, 0 )
-#    include "fluentuiappearance.h"
-#    include "palettemanager.h"
-#endif
+// 修复：getColorSchemeIndex() 通过 fluentUIAppearance 宏读取主题，该宏定义在 fluentuiappearance.h 中；
+// 原代码仅在 Qt<=6.8.0 时包含它，导致 Qt 6.9+ 编译报错 "fluentUIAppearance was not declared in this scope"。
+// 本项目强制深色主题、始终走 PaletteManager 路径，故这里无条件包含该头文件（palettemanager.h 已在前面包含）。
+#include "fluentuiappearance.h"
 
 static constexpr int selectionIndicatorWidth  = 2;
 static constexpr int selectionIndicatorRadius = 2;
