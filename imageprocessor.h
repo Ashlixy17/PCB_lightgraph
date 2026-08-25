@@ -80,10 +80,24 @@ public:
     static QColor getCustomOspColor();               // OSP
     static QColor getCustomHaslColor();              // 喷锡
     static QColor getCustomBareSubstrateColor();     // 裸露基材
+    static QColor getCustomMaskBlueColor();          // 阻焊：蓝色
+    static QColor getCustomMaskBlackColor();         // 阻焊：黑色
+    static QColor getCustomMaskRedColor();           // 阻焊：红色
+    static QColor getCustomMaskGreenColor();         // 阻焊：绿色
+    static QColor getCustomMaskWhiteColor();         // 阻焊：白色
+    static QColor getCustomMaskYellowColor();        // 阻焊：黄色
+    static QColor getCustomMaskPurpleColor();        // 阻焊：紫色
     static void setCustomEnigColor(const QColor& c);
     static void setCustomOspColor(const QColor& c);
     static void setCustomHaslColor(const QColor& c);
     static void setCustomBareSubstrateColor(const QColor& c);
+    static void setCustomMaskBlueColor(const QColor& c);
+    static void setCustomMaskBlackColor(const QColor& c);
+    static void setCustomMaskRedColor(const QColor& c);
+    static void setCustomMaskGreenColor(const QColor& c);
+    static void setCustomMaskWhiteColor(const QColor& c);
+    static void setCustomMaskYellowColor(const QColor& c);
+    static void setCustomMaskPurpleColor(const QColor& c);
 
 private:
     // 可自定义色值的静态存储（默认值定义见 imageprocessor.cpp）
@@ -91,6 +105,13 @@ private:
     static QColor s_customOsp;
     static QColor s_customHasl;
     static QColor s_customBare;
+    static QColor s_customMaskBlue;
+    static QColor s_customMaskBlack;
+    static QColor s_customMaskRed;
+    static QColor s_customMaskGreen;
+    static QColor s_customMaskWhite;
+    static QColor s_customMaskYellow;
+    static QColor s_customMaskPurple;
 
     void renderLEDOverlay(
         QImage& composite,

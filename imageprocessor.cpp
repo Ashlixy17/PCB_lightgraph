@@ -31,11 +31,14 @@ ImageProcessor::~ImageProcessor() {
 }
 
 QColor ImageProcessor::getSolderMaskColor(const QString& colorName) {
-    if (colorName == "蓝色") return QColor(0, 50, 150, 200);
-    if (colorName == "红色") return QColor(150, 0, 0, 200);
-    if (colorName == "黑色") return QColor(10, 10, 10, 245);
-    if (colorName == "绿色") return QColor(0, 100, 50, 200);
-    return QColor(240, 240, 240, 220); // 白色
+    // 阻焊颜色可自定义（Option -> 颜色设置），这里保留各自的默认 alpha（阻焊半透明合成语义）
+    if (colorName == "蓝色") return QColor(s_customMaskBlue.red(),  s_customMaskBlue.green(),  s_customMaskBlue.blue(),  200);
+    if (colorName == "红色") return QColor(s_customMaskRed.red(),   s_customMaskRed.green(),   s_customMaskRed.blue(),   200);
+    if (colorName == "黑色") return QColor(s_customMaskBlack.red(), s_customMaskBlack.green(), s_customMaskBlack.blue(), 245);
+    if (colorName == "绿色") return QColor(s_customMaskGreen.red(), s_customMaskGreen.green(), s_customMaskGreen.blue(), 200);
+    if (colorName == "黄色") return QColor(s_customMaskYellow.red(), s_customMaskYellow.green(), s_customMaskYellow.blue(), 200);
+    if (colorName == "紫色") return QColor(s_customMaskPurple.red(), s_customMaskPurple.green(), s_customMaskPurple.blue(), 200);
+    return QColor(s_customMaskWhite.red(), s_customMaskWhite.green(), s_customMaskWhite.blue(), 220); // 白色
 }
 
 QColor ImageProcessor::getSilkColor(const QString& maskColorName) {
@@ -44,20 +47,41 @@ QColor ImageProcessor::getSilkColor(const QString& maskColorName) {
     return Qt::white;
 }
 
-// 自定义色值默认值：沉金 / OSP(#F0AA93) / 喷锡 / 裸露基材
+// 自定义色值默认值：沉金 / OSP(#F0AA93) / 喷锡 / 裸露基材 + 阻焊层五色（RGB 与旧硬编码一致）
 QColor ImageProcessor::s_customEnig = QColor(240, 217, 140);
 QColor ImageProcessor::s_customOsp = QColor(240, 170, 147);
 QColor ImageProcessor::s_customHasl = QColor(200, 200, 215);
 QColor ImageProcessor::s_customBare = QColor(153, 187, 119);
+QColor ImageProcessor::s_customMaskBlue  = QColor(0, 50, 150);
+QColor ImageProcessor::s_customMaskBlack = QColor(10, 10, 10);
+QColor ImageProcessor::s_customMaskRed   = QColor(150, 0, 0);
+QColor ImageProcessor::s_customMaskGreen = QColor(0, 100, 50);
+QColor ImageProcessor::s_customMaskWhite = QColor(240, 240, 240);
+QColor ImageProcessor::s_customMaskYellow  = QColor(192, 167, 13);   // #C0A70D
+QColor ImageProcessor::s_customMaskPurple = QColor(26, 0, 31);       // #1A001F
 
 QColor ImageProcessor::getCustomEnigColor()          { return s_customEnig; }
 QColor ImageProcessor::getCustomOspColor()           { return s_customOsp; }
 QColor ImageProcessor::getCustomHaslColor()          { return s_customHasl; }
 QColor ImageProcessor::getCustomBareSubstrateColor() { return s_customBare; }
+QColor ImageProcessor::getCustomMaskBlueColor()      { return s_customMaskBlue; }
+QColor ImageProcessor::getCustomMaskBlackColor()     { return s_customMaskBlack; }
+QColor ImageProcessor::getCustomMaskRedColor()       { return s_customMaskRed; }
+QColor ImageProcessor::getCustomMaskGreenColor()     { return s_customMaskGreen; }
+QColor ImageProcessor::getCustomMaskWhiteColor()     { return s_customMaskWhite; }
+QColor ImageProcessor::getCustomMaskYellowColor()    { return s_customMaskYellow; }
+QColor ImageProcessor::getCustomMaskPurpleColor()    { return s_customMaskPurple; }
 void ImageProcessor::setCustomEnigColor(const QColor& c)          { if (c.isValid()) s_customEnig = c; }
 void ImageProcessor::setCustomOspColor(const QColor& c)           { if (c.isValid()) s_customOsp = c; }
 void ImageProcessor::setCustomHaslColor(const QColor& c)          { if (c.isValid()) s_customHasl = c; }
 void ImageProcessor::setCustomBareSubstrateColor(const QColor& c) { if (c.isValid()) s_customBare = c; }
+void ImageProcessor::setCustomMaskBlueColor(const QColor& c)      { if (c.isValid()) s_customMaskBlue = c; }
+void ImageProcessor::setCustomMaskBlackColor(const QColor& c)     { if (c.isValid()) s_customMaskBlack = c; }
+void ImageProcessor::setCustomMaskRedColor(const QColor& c)       { if (c.isValid()) s_customMaskRed = c; }
+void ImageProcessor::setCustomMaskGreenColor(const QColor& c)     { if (c.isValid()) s_customMaskGreen = c; }
+void ImageProcessor::setCustomMaskWhiteColor(const QColor& c)     { if (c.isValid()) s_customMaskWhite = c; }
+void ImageProcessor::setCustomMaskYellowColor(const QColor& c)    { if (c.isValid()) s_customMaskYellow = c; }
+void ImageProcessor::setCustomMaskPurpleColor(const QColor& c)    { if (c.isValid()) s_customMaskPurple = c; }
 
 QColor ImageProcessor::getMetalRenderColor(const QString& finishType) {
     if (finishType.contains("喷锡")) return getCustomHaslColor();

@@ -20,15 +20,14 @@
 <br>
 
 <p align="center">
-PCB_lightgraph是一个将 2D 插画<br>一键转换为可制造 PCB 分层图纸的桌面工具<br>
+PCB_lightgraph是一个将 2D 插画<br>一键转换为可制造 PCB 分层图纸的高性能桌面工具<br>
 实时预览，图片无需预处理。
 </p>
 
+### PCB_lightgraph交流QQ群：[点击加入群聊](https://qm.qq.com/q/w8af77CnDi) **734946967**
 
-
-## 亮点功能
-
-1. **多层自动拆分**：自动拆为铜层/阻焊/丝印/背透光四层，实现**单面5色+透光n色**（阻焊色支持白/蓝/黑/红/绿，白色自动联动反色）
+# 亮点功能
+1. **多层自动拆分**：自动拆为铜层/阻焊/丝印/背透光四层，实现**单面5色+透光n色**（阻焊色支持白/蓝/黑/红/绿/黄/紫，白色自动联动反色）
 2. **灯光设计**：自动（重心建议）或手动布灯，灯光范围实时预览，散射半径与不透明度可调
 3. **边缘处理双模式**：边缘增强（拉普拉斯）/ 描边（Canny），共享阈值统一调参
 4. **工程文件**：一键保存/打开 `*.pcblg` 工程包
@@ -37,27 +36,31 @@ PCB_lightgraph是一个将 2D 插画<br>一键转换为可制造 PCB 分层图�
 7. **渐进式渲染**：滑块拖动按「自适应预览 → 可选细化 → 原图」渐进渲染，大图调参流畅不卡顿
 8. **界面缩放与屏幕适配**：`Option -> 界面缩放` 75%~150% 全局缩放（无需重启），启动自动适配屏幕，小屏友好
 9. **多种表面工艺**：沉金 / 喷锡 / **OSP 玫瑰金（#F0AA93）**，金属像素按工艺匹配，导出自动命名 ENIG/HASL/OSP
-10. **自定义色值**：`Option -> 颜色设置` 可调沉金/OSP/喷锡/裸露基材显示色值（本地持久化，与工程无关）；`重置所有设置` 一键恢复默认
+10. **自定义色值**：`Option -> 颜色设置` 可调沉金/OSP/喷锡/裸露基材及蓝/黑/红/绿/白/黄/紫七种阻焊层显示色值（本地持久化，与工程无关）；`重置所有设置` 一键恢复默认
+11. **高性能**：使用 **C++** 进行编写，给你极致的反应速度
 
-<details>
-
-<summary>点击查看界面概览</summary>
 
 ### 一键自动金色沉金勾线，单面5色，随意调节，实时预览，图片可无需预处理。(此示例无预处理)
 
-<img width="100%" height="761" alt="image" src="https://github.com/user-attachments/assets/d7091f05-72bc-4e69-837b-43a9e4420d71" />
+![alt text](ref_pics/image_release.png)
 
 
 
-</details>
+# 相关视频教程
+
+- [PCB艺术画制作 速通【教程】 v1.1.1](https://www.bilibili.com/video/BV1bJRbBeEW9/)
+- [从零开始的二次元电路板艺术画设计 v1.2.0](https://www.bilibili.com/video/BV1CQjz6ZELZ/)
+- [PCB灯光画以战双帕弥什露西亚为例](https://www.bilibili.com/video/BV1EgAaz2Exx/)
+
 
 ## 快速上手
 
-1. 打开程序，`File -> 导入图片`（无需预处理）
-2. 点击分组标题展开参数（基础参数/灯光/边缘操作等，控制台可滚动）
-3. 视需求展开「边缘操作」分组，选择描边或增强
-4. （可选）展开「灯光」分组使用自动/手动布灯预览效果
-5. `File -> 导出图纸`，或 `保存工程 (.pcblg)` 中途保存
+1. 从[RELEASE](https://github.com/tomatorigid/PCB_lightgraph/releases)下载本软件最新版本，解压缩
+2. 打开程序（双击压缩包内exe），`File -> 导入图片`（无需预处理）
+3. 点击分组标题展开参数（基础参数/灯光/边缘操作等，控制台可滚动）
+4. 视需求展开「边缘操作」分组，选择描边或增强
+5. （可选）展开「灯光」分组使用自动/手动布灯预览效果
+6. `File -> 导出图纸`，或 `保存工程 (.pcblg)` 中途保存
 
 
 ## 技术要点
@@ -80,33 +83,17 @@ PCB_lightgraph是一个将 2D 插画<br>一键转换为可制造 PCB 分层图�
 ### 5. 自动布灯建议
 基于图像分布与权重给出布灯候选点，支持手动覆盖调整。
 
-
-
 ## 性能、兼容性与优化处理
 
 - 边缘计算缓存化：避免重复计算，边缘模式切换与反复预览响应迅速
 - 渐进式渲染：滑块拖动时按「自适应预览 → 可选细化 → 原图」三阶段逐帧渲染，预览分辨率随图片尺寸自适应，大图操作不卡顿
 - 大图高稳定导入：像素上限预判与自动缩放，降低崩溃风险
 - 图片格式强兼容：文件头检测，处理后缀与真实编码不一致的图片
+- C++底层，性能强悍，内存占用少
 
 
 
-## 构建
-
-- 环境：Qt 6.5.3，Windows（MinGW 64 / MSVC2019 64 均可）
-- FluentUI3Style 已内嵌至 `third_party/`，无需额外安装；MSVC 构建自动启用 `/utf-8`
-- 步骤：Qt Creator 打开 `PCB_lightgraph.pro`，选择 Kit，构建运行
-
-
-
-## 相关视频
-
-- [PCB艺术画制作 速通【教程】 v1.1.1](https://www.bilibili.com/video/BV1bJRbBeEW9/)
-- [从零开始的二次元电路板艺术画设计 v1.2.0](https://www.bilibili.com/video/BV1CQjz6ZELZ/)
-- [PCB灯光画以战双帕弥什露西亚为例](https://www.bilibili.com/video/BV1EgAaz2Exx/)
-
-
-## 感谢
+## 作者及感谢
 
 **作者**：<br>
 [@芙ling痛恨数学分析](https://space.bilibili.com/549252923) 独立开发并持续维护本软件
@@ -116,11 +103,21 @@ PCB_lightgraph是一个将 2D 插画<br>一键转换为可制造 PCB 分层图�
 [@Laplac_heroin](https://space.bilibili.com/3461564136950176) 优化软件使用体验  
 [FluentUI3Style](https://github.com/XHY-ChuJian/FluentUIStyle)（作者 [@XHY-ChuJian](https://github.com/XHY-ChuJian)，MIT License）—— 本软件 Fluent/WinUI3 界面风格基于该项目，内嵌于 `third_party/FluentUI3Style/`，其授权许可见该目录下 `LICENSE`
 
-用户交流QQ群：[点击加入群聊](https://qm.qq.com/q/w8af77CnDi)
+[@Laplac_heroin](https://space.bilibili.com/3461564136950176) 移植本软件为Web便携版[PCB_lightgraph_Portable](https://github.com/Ashlixy17/PCB_lightgraph_Portable) 
+
+[@G100wasd](https://github.com/G100wasd)移植本软件为嘉立创EDA插件[PCB_lightgraph_Extension](https://github.com/G100wasd/PCB_lightgraph_Extension)
 
 ### 如果觉得软件对你有帮助，帮忙点个 Star 吧！~（网页最上方右上角的小星星），这就是对我们最大的支持了！
 
+## Star History
 
+<a href="https://www.star-history.com/?repos=tomatorigid%2FPCB_lightgraph&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=tomatorigid/PCB_lightgraph&type=date&theme=dark&legend=top-left&sealed_token=QNFNJNGUJKfKO5lynTvy4Xinwg9Yh7bzuUnlw3iSACeBt--ZSlbPpRMhwx9JgCGHuynTjOXSWDip844r2HoepvIPZFmCFb01n4MKGWEUSfksLCMbLoVceUVb9_GTp7O2lFr9QK_KqM3qcU1m-RZdXCTt-3mvgfcyYBhH-39-UmUGAA7-FFxGUpgMpTUU" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=tomatorigid/PCB_lightgraph&type=date&legend=top-left&sealed_token=QNFNJNGUJKfKO5lynTvy4Xinwg9Yh7bzuUnlw3iSACeBt--ZSlbPpRMhwx9JgCGHuynTjOXSWDip844r2HoepvIPZFmCFb01n4MKGWEUSfksLCMbLoVceUVb9_GTp7O2lFr9QK_KqM3qcU1m-RZdXCTt-3mvgfcyYBhH-39-UmUGAA7-FFxGUpgMpTUU" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=tomatorigid/PCB_lightgraph&type=date&legend=top-left&sealed_token=QNFNJNGUJKfKO5lynTvy4Xinwg9Yh7bzuUnlw3iSACeBt--ZSlbPpRMhwx9JgCGHuynTjOXSWDip844r2HoepvIPZFmCFb01n4MKGWEUSfksLCMbLoVceUVb9_GTp7O2lFr9QK_KqM3qcU1m-RZdXCTt-3mvgfcyYBhH-39-UmUGAA7-FFxGUpgMpTUU" />
+ </picture>
+</a>
 
 ## 许可证
 

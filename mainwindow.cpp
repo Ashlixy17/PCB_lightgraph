@@ -140,7 +140,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(m_tempReloadTimer, &QTimer::timeout, this, &MainWindow::checkTempImageUpdated);
     m_tempReloadTimer->start(1200);
 
-    setWindowTitle("PCB_lightgraphv1.5");
+    setWindowTitle("PCB_lightgraphv1.5.1");
     // 运行时窗口图标：使用随程序打包的圆角 logo（多尺寸 ICO 资源）
     setWindowIcon(QIcon(QStringLiteral(":/icons/logo.ico")));
 
@@ -150,6 +150,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     ImageProcessor::setCustomOspColor(s.value(QStringLiteral("colors/osp"), ImageProcessor::getCustomOspColor()).value<QColor>());
     ImageProcessor::setCustomHaslColor(s.value(QStringLiteral("colors/hasl"), ImageProcessor::getCustomHaslColor()).value<QColor>());
     ImageProcessor::setCustomBareSubstrateColor(s.value(QStringLiteral("colors/bare"), ImageProcessor::getCustomBareSubstrateColor()).value<QColor>());
+    // 阻焊层五色
+    ImageProcessor::setCustomMaskBlueColor(s.value(QStringLiteral("colors/maskBlue"), ImageProcessor::getCustomMaskBlueColor()).value<QColor>());
+    ImageProcessor::setCustomMaskBlackColor(s.value(QStringLiteral("colors/maskBlack"), ImageProcessor::getCustomMaskBlackColor()).value<QColor>());
+    ImageProcessor::setCustomMaskRedColor(s.value(QStringLiteral("colors/maskRed"), ImageProcessor::getCustomMaskRedColor()).value<QColor>());
+    ImageProcessor::setCustomMaskGreenColor(s.value(QStringLiteral("colors/maskGreen"), ImageProcessor::getCustomMaskGreenColor()).value<QColor>());
+    ImageProcessor::setCustomMaskWhiteColor(s.value(QStringLiteral("colors/maskWhite"), ImageProcessor::getCustomMaskWhiteColor()).value<QColor>());
+    ImageProcessor::setCustomMaskYellowColor(s.value(QStringLiteral("colors/maskYellow"), ImageProcessor::getCustomMaskYellowColor()).value<QColor>());
+    ImageProcessor::setCustomMaskPurpleColor(s.value(QStringLiteral("colors/maskPurple"), ImageProcessor::getCustomMaskPurpleColor()).value<QColor>());
 }
 
 MainWindow::~MainWindow() {
@@ -207,7 +215,7 @@ void MainWindow::setupUI() {
     basicContentLayout->addWidget(combo_surfaceFinish);
 
     combo_maskColor = new QComboBox();
-    combo_maskColor->addItems({"蓝色", "黑色", "红色", "绿色", "白色"});
+    combo_maskColor->addItems({"蓝色", "黑色", "红色", "绿色", "白色", "黄色", "紫色"});
     connect(combo_maskColor, SIGNAL(currentIndexChanged(int)), this, SLOT(updateProcess()));
     basicContentLayout->addWidget(new QLabel("阻焊颜色:"));
     basicContentLayout->addWidget(combo_maskColor);
@@ -342,7 +350,7 @@ void MainWindow::setupUI() {
     radio_edgeEnhance = new QRadioButton("边缘增强");
     edgeModeGroup->addButton(radio_edgeStroke);
     edgeModeGroup->addButton(radio_edgeEnhance);
-    radio_edgeEnhance->setChecked(true);
+    radio_edgeStroke->setChecked(true); // 默认描边（Canny）
     edgeDetailLayout->addWidget(radio_edgeStroke);
     edgeDetailLayout->addWidget(radio_edgeEnhance);
 
@@ -671,14 +679,28 @@ void MainWindow::openColorSettingsDialog() {
         QColor(240, 217, 140),   // 沉金
         QColor(240, 170, 147),   // OSP #F0AA93
         QColor(200, 200, 215),   // 喷锡
-        QColor(153, 187, 119)    // 裸露基材
+        QColor(153, 187, 119),   // 裸露基材
+        QColor(0, 50, 150),      // 蓝色阻焊
+        QColor(10, 10, 10),      // 黑色阻焊
+        QColor(150, 0, 0),       // 红色阻焊
+        QColor(0, 100, 50),      // 绿色阻焊
+        QColor(240, 240, 240),   // 白色阻焊
+        QColor(192, 167, 13),    // 黄色阻焊 #C0A70D
+        QColor(26, 0, 31)        // 紫色阻焊 #1A001F
     };
 
     QVector<ColorRow> rows;
-    rows.append(ColorRow{QStringLiteral("沉金"),        QStringLiteral("colors/enig"), ImageProcessor::getCustomEnigColor(),          nullptr});
-    rows.append(ColorRow{QStringLiteral("OSP"),         QStringLiteral("colors/osp"),  ImageProcessor::getCustomOspColor(),           nullptr});
-    rows.append(ColorRow{QStringLiteral("喷锡"),        QStringLiteral("colors/hasl"), ImageProcessor::getCustomHaslColor(),          nullptr});
-    rows.append(ColorRow{QStringLiteral("裸露基材"),    QStringLiteral("colors/bare"), ImageProcessor::getCustomBareSubstrateColor(), nullptr});
+    rows.append(ColorRow{QStringLiteral("沉金"),        QStringLiteral("colors/enig"),      ImageProcessor::getCustomEnigColor(),          nullptr});
+    rows.append(ColorRow{QStringLiteral("OSP"),         QStringLiteral("colors/osp"),       ImageProcessor::getCustomOspColor(),           nullptr});
+    rows.append(ColorRow{QStringLiteral("喷锡"),        QStringLiteral("colors/hasl"),      ImageProcessor::getCustomHaslColor(),          nullptr});
+    rows.append(ColorRow{QStringLiteral("裸露基材"),    QStringLiteral("colors/bare"),      ImageProcessor::getCustomBareSubstrateColor(), nullptr});
+    rows.append(ColorRow{QStringLiteral("蓝色阻焊"),    QStringLiteral("colors/maskBlue"),  ImageProcessor::getCustomMaskBlueColor(),      nullptr});
+    rows.append(ColorRow{QStringLiteral("黑色阻焊"),    QStringLiteral("colors/maskBlack"), ImageProcessor::getCustomMaskBlackColor(),     nullptr});
+    rows.append(ColorRow{QStringLiteral("红色阻焊"),    QStringLiteral("colors/maskRed"),   ImageProcessor::getCustomMaskRedColor(),       nullptr});
+    rows.append(ColorRow{QStringLiteral("绿色阻焊"),    QStringLiteral("colors/maskGreen"), ImageProcessor::getCustomMaskGreenColor(),     nullptr});
+    rows.append(ColorRow{QStringLiteral("白色阻焊"),    QStringLiteral("colors/maskWhite"), ImageProcessor::getCustomMaskWhiteColor(),     nullptr});
+    rows.append(ColorRow{QStringLiteral("黄色阻焊"),    QStringLiteral("colors/maskYellow"), ImageProcessor::getCustomMaskYellowColor(),    nullptr});
+    rows.append(ColorRow{QStringLiteral("紫色阻焊"),    QStringLiteral("colors/maskPurple"), ImageProcessor::getCustomMaskPurpleColor(),    nullptr});
 
     // 打开对话框时的初始值：供「还原」按钮恢复（与出厂默认值不同）
     QVector<QColor> initialValues;
@@ -687,12 +709,12 @@ void MainWindow::openColorSettingsDialog() {
     QDialog dlg(this);
     dlg.setWindowTitle(QStringLiteral("颜色设置"));
     dlg.setModal(true);
-    dlg.setMinimumWidth(480);
+    dlg.setMinimumWidth(520);
 
     QVBoxLayout *lay = new QVBoxLayout(&dlg);
     lay->setSpacing(10);
     lay->addWidget(new QLabel(QStringLiteral(
-        "自定义各工艺的显示色值（本地持久化，与 .pcblg 工程无关）：\n"
+        "自定义各工艺与阻焊层的显示色值（本地持久化，与 .pcblg 工程无关）：\n"
         "修改 OSP 色值后，OSP 金属匹配色相也会跟随新色值。"), &dlg));
 
     // 更新色块按钮（左侧小色块图标 + 右侧十六进制值）
@@ -708,7 +730,7 @@ void MainWindow::openColorSettingsDialog() {
     for (int i = 0; i < rows.size(); ++i) {
         QHBoxLayout *hl = new QHBoxLayout;
         QLabel *nameLbl = new QLabel(rows[i].name, &dlg);
-        nameLbl->setMinimumWidth(80);
+        nameLbl->setMinimumWidth(90);
         hl->addWidget(nameLbl);
 
         rows[i].btn = new QPushButton(&dlg);
@@ -765,10 +787,24 @@ void MainWindow::openColorSettingsDialog() {
         ImageProcessor::setCustomOspColor(rows[1].value);
         ImageProcessor::setCustomHaslColor(rows[2].value);
         ImageProcessor::setCustomBareSubstrateColor(rows[3].value);
+        ImageProcessor::setCustomMaskBlueColor(rows[4].value);
+        ImageProcessor::setCustomMaskBlackColor(rows[5].value);
+        ImageProcessor::setCustomMaskRedColor(rows[6].value);
+        ImageProcessor::setCustomMaskGreenColor(rows[7].value);
+        ImageProcessor::setCustomMaskWhiteColor(rows[8].value);
+        ImageProcessor::setCustomMaskYellowColor(rows[9].value);
+        ImageProcessor::setCustomMaskPurpleColor(rows[10].value);
         s.setValue(QStringLiteral("colors/enig"), rows[0].value);
         s.setValue(QStringLiteral("colors/osp"),  rows[1].value);
         s.setValue(QStringLiteral("colors/hasl"), rows[2].value);
         s.setValue(QStringLiteral("colors/bare"), rows[3].value);
+        s.setValue(QStringLiteral("colors/maskBlue"),  rows[4].value);
+        s.setValue(QStringLiteral("colors/maskBlack"), rows[5].value);
+        s.setValue(QStringLiteral("colors/maskRed"),   rows[6].value);
+        s.setValue(QStringLiteral("colors/maskGreen"), rows[7].value);
+        s.setValue(QStringLiteral("colors/maskWhite"), rows[8].value);
+        s.setValue(QStringLiteral("colors/maskYellow"), rows[9].value);
+        s.setValue(QStringLiteral("colors/maskPurple"), rows[10].value);
         if (!m_origin.isNull()) updateProcess(); // 有图时立即重新渲染应用新色值
     }
 }
@@ -790,6 +826,13 @@ void MainWindow::resetAllSettings() {
     ImageProcessor::setCustomOspColor(QColor(240, 170, 147));
     ImageProcessor::setCustomHaslColor(QColor(200, 200, 215));
     ImageProcessor::setCustomBareSubstrateColor(QColor(153, 187, 119));
+    ImageProcessor::setCustomMaskBlueColor(QColor(0, 50, 150));
+    ImageProcessor::setCustomMaskBlackColor(QColor(10, 10, 10));
+    ImageProcessor::setCustomMaskRedColor(QColor(150, 0, 0));
+    ImageProcessor::setCustomMaskGreenColor(QColor(0, 100, 50));
+    ImageProcessor::setCustomMaskWhiteColor(QColor(240, 240, 240));
+    ImageProcessor::setCustomMaskYellowColor(QColor(192, 167, 13));
+    ImageProcessor::setCustomMaskPurpleColor(QColor(26, 0, 31));
 
     // 恢复默认字体（13px 微软雅黑），并同步缩放菜单勾选态
     QFont f;
@@ -1803,7 +1846,7 @@ bool MainWindow::loadArgsFromJson(const QString& argsPath) {
     setSlider(s_bareSubstrateColorSimilarity, controls.value("bareSubstrateColorSimilarity").toInt(s_bareSubstrateColorSimilarity ? s_bareSubstrateColorSimilarity->value() : 0));
 
     setCheck(check_edgeEnable, controls.value("edgeEnable").toBool(check_edgeEnable ? check_edgeEnable->isChecked() : false));
-    const QString edgeMode = controls.value("edgeMode").toString((radio_edgeStroke && radio_edgeStroke->isChecked()) ? "stroke" : "enhance");
+    const QString edgeMode = controls.value("edgeMode").toString(QStringLiteral("stroke"));
     setRadio(radio_edgeStroke, edgeMode == "stroke");
     setRadio(radio_edgeEnhance, edgeMode != "stroke");
     setSlider(s_edgeThresh, controls.value("edgeThreshMin").toInt(s_edgeThresh ? s_edgeThresh->value() : 0));
